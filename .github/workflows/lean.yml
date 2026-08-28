@@ -2,9 +2,13 @@ name: Lean 4 CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -12,12 +16,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Install Elan & Update Lake Dependencies
-        run: |
-          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
-          $HOME/.elan/bin/lake update
-
-      - name: Build with Lean Action
+      - name: Setup Lean
         uses: leanprover/lean-action@v1
+        with:
+          build: "false"
+
+      - name: Check main.lean
+        run: lake env lean main.lean
