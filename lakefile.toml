@@ -1,0 +1,10 @@
+name = "antigrav"
+version = "0.1.0"
+defaultTargets = ["antigrav"]
+
+[[lean_lib]]
+name = "Antigrav"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
