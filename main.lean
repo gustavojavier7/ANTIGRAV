@@ -5306,6 +5306,7 @@ example :
   dsimp
   constructor
   · norm_num [BlockCoord.Normalized, BlockCoord.Valid, Odd]
+    refine ⟨2, by norm_num⟩
   · native_decide
 
 
@@ -5321,6 +5322,7 @@ example :
   dsimp
   constructor
   · norm_num [BlockCoord.Normalized, BlockCoord.Valid, Odd]
+    refine ⟨11, by norm_num⟩
   · native_decide
 
 
