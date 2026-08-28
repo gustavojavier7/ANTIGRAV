@@ -14,5 +14,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Lean & Build
+      - name: Install Elan & Update Lake Dependencies
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y
+          $HOME/.elan/bin/lake update
+
+      - name: Build with Lean Action
         uses: leanprover/lean-action@v1
