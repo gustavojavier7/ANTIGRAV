@@ -5991,30 +5991,7 @@ def ReducedEventuallyDescends : Prop :=
 
 /- 15100: ONECOORD / SIZE LEMMAS ------------------------------- -/
 
-/- 15200: REDUCED ORBIT ALGEBRA -------------------------------- -/
-
-/--
-Recorrer primero `m` pasos de la órbita reducida y luego `n`
-pasos equivale a recorrer `m + n` pasos desde el estado inicial.
-
-Esta identidad será la operación de composición usada por el
-Teorema Puente para concatenar:
-
-  c --L pasos--> d --k pasos--> oneCoord
-
-en una sola órbita de `L + k` pasos desde `c`.
--/
-theorem reducedCoordOrbit_add
-    (c : BlockCoord)
-    (m n : ℕ) :
-    reducedCoordOrbit c (m + n) =
-      reducedCoordOrbit
-        (reducedCoordOrbit c m) n := by
-  unfold reducedCoordOrbit
-  rw [Nat.add_comm]
-  exact
-    Function.iterate_add_apply
-      normalizedNextCoord n m c
+/- 15110: DECODE ONECOORD -------------------------------------- -/
 
 /--
 `oneCoord` decodifica exactamente al natural 1.
@@ -6024,6 +6001,8 @@ theorem decodeBlockCoord_oneCoord :
   unfold oneCoord
   exact decode_encodeBlockCoord (by native_decide)
 
+
+/- 15120: NONTERMINAL NORMALIZED SIZE -------------------------- -/
 
 /--
 Toda coordenada normalizada distinta de `oneCoord`
@@ -6054,12 +6033,91 @@ theorem normalized_ne_one_decode_gt_one
   omega
 
 
+/- 15199: GOTO 15200 ------------------------------------------- -/
 
 
+/- 15200: REDUCED ORBIT ALGEBRA ------------------------------- -/
+
+/- 15210: CONCATENATE REDUCED ORBITS --------------------------- -/
+
+/--
+Recorrer primero `m` pasos de la órbita reducida y luego `n`
+pasos equivale a recorrer `m + n` pasos desde el estado inicial.
+
+Esta identidad será la operación de composición usada por el
+Teorema Puente para concatenar:
+
+  c --L pasos--> d --k pasos--> oneCoord
+
+en una sola órbita de `L + k` pasos desde `c`.
+-/
+theorem reducedCoordOrbit_add
+    (c : BlockCoord)
+    (m n : ℕ) :
+    reducedCoordOrbit c (m + n) =
+      reducedCoordOrbit
+        (reducedCoordOrbit c m) n := by
+  unfold reducedCoordOrbit
+  rw [Nat.add_comm]
+  exact
+    Function.iterate_add_apply
+      normalizedNextCoord n m c
+
+/- 15299: GOTO 15300 ------------------------------------------- -/
 
 
+/- 15300: REACHONE -> DESCENT ---------------------------------- -/
+
+/- 15310: ASSUME UNIVERSAL REDUCED REACHABILITY ---------------- -/
+
+/--
+Si todo estado normalizado alcanza `oneCoord`, entonces todo
+estado normalizado distinto de `oneCoord` posee una ventana
+positiva de descenso.
+
+Esta es la dirección:
+
+  AllNormalizedReachOneByReducedCoords
+      -> ReducedEventuallyDescends
+-/
+theorem reduced_reach_one_implies_eventual_descent
+    (hreach : AllNormalizedReachOneByReducedCoords) :
+    ReducedEventuallyDescends := by
+
+  /- 15320: TAKE NORMALIZED NONTERMINAL STATE ------------------ -/
+  intro c hc hne
+
+  /- 15330: GET A REACHONE WITNESS ----------------------------- -/
+  obtain ⟨n, hn⟩ := hreach c hc
+
+  /- 15340: FAIL-FIRST: n CANNOT BE ZERO ----------------------- -/
+  have hnpos :
+      0 < n := by
+    by_contra hnotpos
+
+    have hnzero :
+        n = 0 := by
+      omega
+
+    subst n
+
+    simp only [reducedCoordOrbit_zero] at hn
+
+    exact hne hn
+
+  /- 15350: USE THE SAME n AS DESCENT WINDOW ------------------- -/
+  unfold OBL_DESCENT
+
+  refine ⟨n, hnpos, ?_⟩
+
+  /- 15360: ENDPOINT IS ONECOORD ------------------------------- -/
+  rw [hn, decodeBlockCoord_oneCoord]
+
+  /- 15370: STARTING STATE IS STRICTLY ABOVE ONE --------------- -/
+  exact normalized_ne_one_decode_gt_one hc hne
 
 
+/- 15399: GOTO 15400 ------------------------------------------- -/
 /-!
 normalizedNextCoord c no es, en general, el sucesor real blockNext
 del natural decodificado. Es el representante normalizado canónico
