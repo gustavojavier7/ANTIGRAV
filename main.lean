@@ -5991,6 +5991,31 @@ def ReducedEventuallyDescends : Prop :=
 
 /- 15100: ONECOORD / SIZE LEMMAS ------------------------------- -/
 
+/- 15200: REDUCED ORBIT ALGEBRA -------------------------------- -/
+
+/--
+Recorrer primero `m` pasos de la órbita reducida y luego `n`
+pasos equivale a recorrer `m + n` pasos desde el estado inicial.
+
+Esta identidad será la operación de composición usada por el
+Teorema Puente para concatenar:
+
+  c --L pasos--> d --k pasos--> oneCoord
+
+en una sola órbita de `L + k` pasos desde `c`.
+-/
+theorem reducedCoordOrbit_add
+    (c : BlockCoord)
+    (m n : ℕ) :
+    reducedCoordOrbit c (m + n) =
+      reducedCoordOrbit
+        (reducedCoordOrbit c m) n := by
+  unfold reducedCoordOrbit
+  rw [Nat.add_comm]
+  exact
+    Function.iterate_add_apply
+      normalizedNextCoord n m c
+
 /--
 `oneCoord` decodifica exactamente al natural 1.
 -/
