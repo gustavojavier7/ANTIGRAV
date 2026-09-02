@@ -5914,6 +5914,80 @@ theorem reducedCoordOrbit_one
       rw [reducedCoordOrbit_succ, ih,
           normalizedNextCoord_one]
 
+/-!
+================================================================
+15000 — BRIDGE MACHINE / REDUCED EVENTUAL DESCENT
+================================================================
+
+Este módulo inicia la capa pseudoimperativa del Teorema Puente.
+
+La numeración 15000+ pertenece a la nueva arquitectura.
+Las definiciones matemáticas siguen siendo objetos Lean normales;
+el Program Counter modela el protocolo que organiza su uso.
+-/
+
+
+/- 15000: PROGRAM COUNTER -------------------------------------- -/
+
+inductive BridgePC where
+  | p15000   -- entrada del módulo
+  | p15010   -- OBL_DESCENT disponible
+  | p15020   -- ReducedEventuallyDescends disponible
+  | p15100   -- lemas de tamaño / oneCoord
+  | p15200   -- álgebra de reducedCoordOrbit
+  | p15300   -- ReachOne -> Descent
+  | p15400   -- Descent -> ReachOne
+  | p15600   -- Teorema Puente
+  | p15700   -- composición con bloques impares
+  | p15800   -- interfaz de certificados PCA
+  | p15900   -- fallo / verificación fallida
+  | p15999   -- STOP del módulo
+deriving DecidableEq, Repr
+
+
+/- 15001: MACHINE STATE ---------------------------------------- -/
+
+structure BridgeMachineState where
+  pc     : BridgePC
+  failed : Bool := false
+deriving Repr
+
+
+/- 15002: INITIAL STATE ---------------------------------------- -/
+
+def bridgeInitialState : BridgeMachineState :=
+  {
+    pc := .p15000
+    failed := false
+  }
+
+
+/- 15010: LOCAL DESCENT OBLIGATION ----------------------------- -/
+
+/--
+`OBL_DESCENT c` afirma que existe una ventana positiva de la
+dinámica reducida que termina en un estado estrictamente menor
+que `c` según `decodeBlockCoord`.
+-/
+def OBL_DESCENT (c : BlockCoord) : Prop :=
+  ∃ L : ℕ,
+    0 < L ∧
+    decodeBlockCoord (reducedCoordOrbit c L) <
+      decodeBlockCoord c
+
+
+/- 15020: UNIVERSAL REDUCED DESCENT ---------------------------- -/
+
+/--
+Todo estado normalizado distinto de `oneCoord`
+posee alguna ventana finita certificable de descenso.
+-/
+def ReducedEventuallyDescends : Prop :=
+  ∀ c : BlockCoord,
+    c.Normalized →
+    c ≠ oneCoord →
+    OBL_DESCENT c
+
 
 
 
