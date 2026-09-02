@@ -6215,6 +6215,38 @@ theorem reduced_eventual_descent_implies_reach_one
 
 
 /- 15499: GOTO 15600 ------------------------------------------- -/
+/- 15600: BRIDGE THEOREM --------------------------------------- -/
+
+/- 15610: ASSEMBLE BOTH DIRECTIONS ----------------------------- -/
+
+/--
+TEOREMA PUENTE.
+
+El descenso eventual estricto de todo estado normalizado
+no terminal es equivalente a que todo estado normalizado
+alcance `oneCoord` bajo la dinámica reducida.
+
+Esta equivalencia separa:
+
+  * la obligación aritmética abierta:
+      ReducedEventuallyDescends
+
+  * de la consecuencia global:
+      AllNormalizedReachOneByReducedCoords
+-/
+theorem reduced_eventual_descent_iff_reach_one :
+    ReducedEventuallyDescends ↔
+      AllNormalizedReachOneByReducedCoords := by
+  constructor
+
+  /- 15620: DESCENT -> REACHONE ------------------------------- -/
+  · exact reduced_eventual_descent_implies_reach_one
+
+  /- 15630: REACHONE -> DESCENT ------------------------------- -/
+  · exact reduced_reach_one_implies_eventual_descent
+
+
+/- 15699: GOTO 15700 ------------------------------------------- -/
 /-!
 normalizedNextCoord c no es, en general, el sucesor real blockNext
 del natural decodificado. Es el representante normalizado canónico
