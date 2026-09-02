@@ -6118,6 +6118,103 @@ theorem reduced_reach_one_implies_eventual_descent
 
 
 /- 15399: GOTO 15400 ------------------------------------------- -/
+
+/- 15400: DESCENT -> REACHONE ---------------------------------- -/
+
+/- 15410: ASSUME UNIVERSAL EVENTUAL DESCENT -------------------- -/
+
+/--
+Si todo estado normalizado distinto de `oneCoord` posee alguna
+ventana finita de descenso estricto, entonces todo estado
+normalizado alcanza `oneCoord`.
+
+La prueba usa inducción fuerte sobre:
+
+  decodeBlockCoord c
+
+Cada aplicación de `OBL_DESCENT` produce un estado de medida
+estrictamente menor. La hipótesis inductiva resuelve ese estado
+menor y `reducedCoordOrbit_add` concatena ambas ventanas.
+-/
+theorem reduced_eventual_descent_implies_reach_one
+    (hdesc : ReducedEventuallyDescends) :
+    AllNormalizedReachOneByReducedCoords := by
+
+  /- 15420: TAKE NORMALIZED STATE ------------------------------ -/
+  intro c hc
+
+  /- 15430: BUILD WELL-FOUNDED INDUCTION ON DECODED SIZE ------- -/
+  have hmain :
+      ∀ n : ℕ,
+        ∀ d : BlockCoord,
+          d.Normalized →
+          decodeBlockCoord d = n →
+          ReachesOneByReducedCoords d := by
+
+    intro n
+
+    induction n using Nat.strong_induction_on with
+    | h n ih =>
+
+        /- 15440: TAKE STATE OF CURRENT SIZE n ----------------- -/
+        intro d hd hdecode
+
+        /- 15450: TERMINAL BRANCH ------------------------------ -/
+        by_cases hone : d = oneCoord
+
+        · subst d
+
+          refine ⟨0, ?_⟩
+
+          exact reducedCoordOrbit_zero oneCoord
+
+        /- 15460: NONTERMINAL -> OBTAIN STRICT DESCENT WINDOW -- -/
+        · obtain ⟨L, _hLpos, hLT⟩ :=
+            hdesc d hd hone
+
+          let e : BlockCoord :=
+            reducedCoordOrbit d L
+
+          /- 15470: DESCENT ENDPOINT REMAINS NORMALIZED -------- -/
+          have heNorm :
+              e.Normalized := by
+            dsimp [e]
+            exact reducedCoordOrbit_normalized hd L
+
+          /- 15480: DESCENT ENDPOINT HAS SMALLER MEASURE ------- -/
+          have heLT :
+              decodeBlockCoord e < n := by
+            dsimp [e]
+            calc
+              decodeBlockCoord (reducedCoordOrbit d L)
+                  < decodeBlockCoord d := hLT
+              _ = n := hdecode
+
+          /- 15490: RECURSE ON STRICTLY SMALLER STATE ---------- -/
+          have heReach :
+              ReachesOneByReducedCoords e :=
+            ih (decodeBlockCoord e) heLT
+              e heNorm rfl
+
+          obtain ⟨k, hk⟩ := heReach
+
+          /- 15495: CONCATENATE DESCENT WINDOW WITH REACHONE --- -/
+          refine ⟨L + k, ?_⟩
+
+          rw [reducedCoordOrbit_add d L k]
+
+          simpa [e] using hk
+
+  /- 15498: APPLY INDUCTION AT ORIGINAL STATE ------------------ -/
+  exact
+    hmain
+      (decodeBlockCoord c)
+      c
+      hc
+      rfl
+
+
+/- 15499: GOTO 15600 ------------------------------------------- -/
 /-!
 normalizedNextCoord c no es, en general, el sucesor real blockNext
 del natural decodificado. Es el representante normalizado canónico
