@@ -25,3 +25,14 @@ jobs:
 
       - name: Check main.lean
         run: lake env lean main.lean
+
+      - name: Report Lean Version & Build Metadata
+        run: |
+          LEAN_VER=$(lean --version)
+          TOOLCHAIN=$(cat lean-toolchain)
+          echo "### 🚀 Reporte de Compilación Lean 4" >> $GITHUB_STEP_SUMMARY
+          echo "* **Versión de Lean activa:** \`$LEAN_VER\`" >> $GITHUB_STEP_SUMMARY
+          echo "* **Configuración (\`lean-toolchain\`):** \`$TOOLCHAIN\`" >> $GITHUB_STEP_SUMMARY
+          echo "* **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "* **Fecha de verificación:** \`$(date -u '+%Y-%m-%d %H:%M:%S UTC')\`" >> $GITHUB_STEP_SUMMARY
+
