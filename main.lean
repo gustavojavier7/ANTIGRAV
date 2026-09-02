@@ -5989,6 +5989,46 @@ def ReducedEventuallyDescends : Prop :=
     OBL_DESCENT c
 
 
+/- 15100: ONECOORD / SIZE LEMMAS ------------------------------- -/
+
+/--
+`oneCoord` decodifica exactamente al natural 1.
+-/
+theorem decodeBlockCoord_oneCoord :
+    decodeBlockCoord oneCoord = 1 := by
+  unfold oneCoord
+  exact decode_encodeBlockCoord (by native_decide)
+
+
+/--
+Toda coordenada normalizada distinta de `oneCoord`
+representa un natural estrictamente mayor que 1.
+-/
+theorem normalized_ne_one_decode_gt_one
+    {c : BlockCoord}
+    (hc : c.Normalized)
+    (hne : c ≠ oneCoord) :
+    1 < decodeBlockCoord c := by
+
+  have hpos :
+      0 < decodeBlockCoord c :=
+    decodeBlockCoord_pos hc.1
+
+  have hne1 :
+      decodeBlockCoord c ≠ 1 := by
+    intro h1
+    apply hne
+    calc
+      c =
+          encodeBlockCoord (decodeBlockCoord c) :=
+        (encode_decodeBlockCoord hc.1).symm
+      _ = encodeBlockCoord 1 := by
+        rw [h1]
+      _ = oneCoord := rfl
+
+  omega
+
+
 
 
 
