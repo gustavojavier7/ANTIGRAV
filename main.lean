@@ -6247,6 +6247,30 @@ theorem reduced_eventual_descent_iff_reach_one :
 
 
 /- 15699: GOTO 15700 ------------------------------------------- -/
+
+/- 15700: BRIDGE -> ODD BLOCKS --------------------------------- -/
+
+/- 15710: COMPOSE WITH REDUCED/BLOCK EQUIVALENCE -------------- -/
+
+/--
+El descenso eventual universal en la dinámica reducida es
+equivalente a que todo natural impar alcance 1 por bloques.
+
+Esta es la salida global del Teorema Puente hacia la
+formulación original por bloques impares.
+-/
+theorem reduced_eventual_descent_iff_all_odd_blocks :
+    ReducedEventuallyDescends ↔
+      AllOddReachOneByBlocks := by
+
+  /- 15720: BRIDGE TO NORMALIZED REDUCED REACHABILITY ---------- -/
+  /- 15730: REVERSE ODD-BLOCK / REDUCED EQUIVALENCE ------------ -/
+  exact
+    reduced_eventual_descent_iff_reach_one.trans
+      all_odd_blocks_iff_reduced_normalized.symm
+
+
+/- 15799: GOTO 15800 ------------------------------------------- -/
 /-!
 normalizedNextCoord c no es, en general, el sucesor real blockNext
 del natural decodificado. Es el representante normalizado canónico
