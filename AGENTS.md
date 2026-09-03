@@ -10,13 +10,15 @@ PCA is a modular pseudo-imperative machine inspired by BASIC-style explicit `GOT
 When correctness, authority, semantics, or state validity cannot be established, stop before mutating state or fabricating meaning.
 
 ## Authority
-- `Main.lean` is the mathematical authority.
+- `main.lean` is the mathematical authority.
 - `pca.lean` is a derived, manipulable PCA image of that corpus.
-- Never silently weaken, strengthen, reinterpret, or replace `Main.lean`.
+- Never silently weaken, strengthen, reinterpret, or replace `main.lean`.
 - A generated `pca.lean` should record source provenance: source file, source hash, generator version, PCA format version.
 
+Unless explicitly marked IMPLEMENTED, architectural rules in this document are normative requirements, not claims about the current implementation.
+
 ## Architecture
-Preserve the current modular separation:
+Preserve the target modular separation:
 
 ```text
 Antigrav/PCA/
@@ -26,6 +28,8 @@ Antigrav/PCA/
   Engine/
   Interface/
 ```
+
+The `Antigrav/PCA/*` tree is a Skeleton v0 artifact: audited externally; pending integration into ANTIGRAV. It is the target layout for the PCA architecture, not evidence that the repository already contains those modules.
 
 Conceptually:
 
@@ -52,8 +56,10 @@ Rules:
 2. Numeric order does not define control flow.
 3. `GOTO` moves only to an explicit mapped address.
 4. Branches require an explicit evaluator.
-5. `STOP` halts execution; it does not prove or refute a target.
-6. Control-flow success never creates mathematical authority.
+5. `STOP` halts only when its terminal preconditions are satisfied.
+6. `STOP` never creates a mathematical verdict.
+7. If terminal preconditions are not satisfied, execution MUST FAULT.
+8. Control-flow success never creates mathematical authority.
 
 ## FAIL FIRST — Construction
 Use this loop:
@@ -111,6 +117,9 @@ REQUEST
 Verification ≠ commitment.
 Commitment ≠ result sealing.
 STOP ≠ proof.
+STOP never creates a mathematical verdict.
+STOP halts only when its terminal preconditions are satisfied.
+If terminal preconditions are not satisfied, execution MUST FAULT.
 
 ## State Discipline
 Keep separate:
