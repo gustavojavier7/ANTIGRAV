@@ -24,16 +24,30 @@ PCA uses a modular architecture and a BASIC-inspired `GOTO` paradigm to make con
 
 If the machine cannot justify the next transition, computation, proof operation or result, it must stop before inventing one.
 
+## Project Status
+
+```text
+MATHEMATICAL_CORPUS        = PRESENT
+MAIN_LEAN_CI               = PASS
+PCA_SKELETON_V0            = AUDITED_EXTERNALLY
+PCA_SKELETON_IN_REPO       = NO
+PCA_DERIVED_CORPUS         = NOT_CREATED
+FORMAL_AUTHORITY_INTEGRITY = OPEN
+COMMENT_AGENT_LOOP         = NOT_CREATED
+```
+
+The repository presently contains the mathematical corpus and a passing Lean CI. The PCA skeleton is a target/external v0 artifact, audited externally, and not yet integrated into the current ANTIGRAV repository.
+
 ## Mathematical Authority
 
 ```text
-Main.lean = MATHEMATICAL AUTHORITY
+main.lean = MATHEMATICAL AUTHORITY
 ```
 
 PCA may derive:
 
 ```text
-Main.lean
+main.lean
     ↓
 PCA transformation
     ↓
@@ -104,7 +118,7 @@ ONE PROBLEM
 Unknown semantics are not approximated. Missing proof is not replaced by placeholder evidence. Faults must be atomic.
 
 ## Modular Architecture
-Current skeleton:
+Skeleton v0: audited externally; pending integration into ANTIGRAV.
 
 ```text
 Antigrav/PCA/
@@ -114,6 +128,8 @@ Antigrav/PCA/
   Engine/
   Interface/
 ```
+
+This module layout is the target/external skeleton for PCA, not a claim that the repository already contains those modules.
 
 Conceptually:
 
@@ -160,13 +176,16 @@ VerificationLatch
 COMMIT_PROOF
     ↓
 ProofStore
-    ↓
+   ↓
 SEAL_RESULT
 ```
 
 Verification ≠ commitment.
 Commitment ≠ final result.
 STOP ≠ proof.
+STOP never creates a mathematical verdict.
+STOP halts only when its terminal preconditions are satisfied.
+If terminal preconditions are not satisfied, execution MUST FAULT.
 
 ## ROM-BIOS
 Before execution, PCA may run a minimal boot self-test:
@@ -184,11 +203,11 @@ POST
 ROM-BIOS is the operational root of trust.
 Lean is the mathematical root of trust.
 
-## `Main.lean → pca.lean`
+## `main.lean → pca.lean`
 A major direction is to construct a PCA-oriented image of the existing ANTIGRAV corpus:
 
 ```text
-Main.lean
+main.lean
    │ preserve mathematics
    ▼
 pca.lean
