@@ -113,13 +113,9 @@ theorem Tstar_odd (m : ℕ) :
   omega
 
 
-
-
 /-- Counterexample to the proposed universal claim
     `Odd m → runLength m = 1`: take `m = 3`. -/
-theorem runLength_three :
-    runLength 3 = 2 := by
-  native_decide
+theorem runLength_three :    runLength 3 = 2 := by  native_decide
 
 
 
@@ -1253,10 +1249,89 @@ theorem v2_pow_two_mul_odd
   omega
 
 
+theorem Tstar_has_odd_predecessor_iff_not_three_dvd
+    {q : ℕ}
+    (hq : Odd q) :
+    (∃ n : ℕ, Odd n ∧ Tstar n = q) ↔ ¬ 3 ∣ q := by
+  constructor
+  · rintro ⟨n, hn, hqeq⟩
+    intro h3
+    have hmul :
+        2 ^ collatzExponent n * q = 3 * n + 1 := by
+      calc
+        2 ^ collatzExponent n * q = 2 ^ collatzExponent n * Tstar n := by
+          rw [hqeq]
+        _ = 3 * n + 1 := by
+          simpa [Tstar] using (Nat.mul_div_cancel' (collatz_pow_dvd n))
+    have h3div : 3 ∣ 3 * n + 1 := by
+      rcases h3 with ⟨k, hk⟩
+      refine ⟨2 ^ collatzExponent n * k, ?_⟩
+      rw [hmul, hk]
+      ring
+    rcases h3div with ⟨k, hk⟩
+    omega
+  · intro hnot3
+    have hmod : q % 3 = 0 ∨ q % 3 = 1 ∨ q % 3 = 2 := by
+      have hlt : q % 3 < 3 := Nat.mod_lt _ (by omega)
+      omega
+    rcases hmod with h0 | h1 | h2
+    · exfalso
+      exact hnot3 (Nat.dvd_of_mod_eq_zero h0)
+    · refine ⟨(4 * q - 1) / 3, ?_, ?_⟩
+      · refine ⟨4 * (q / 3) + 1, ?_⟩
+        omega
+      · have hEq : 3 * ((4 * q - 1) / 3) + 1 = 2 ^ 2 * q := by
+          omega
+        have hcoll : collatzExponent ((4 * q - 1) / 3) = 2 := by
+          have hv : v2 (3 * ((4 * q - 1) / 3) + 1) = 2 := by
+            rw [hEq]
+            simpa [pow_two, Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc] using
+              (v2_pow_two_mul_odd (r := 2) hq)
+          simpa [collatzExponent] using hv
+        calc
+          Tstar ((4 * q - 1) / 3) =
+              (3 * ((4 * q - 1) / 3) + 1) /
+                2 ^ collatzExponent ((4 * q - 1) / 3) :=
+            rfl
+          _ = (2 ^ 2 * q) / 2 ^ 2 := by
+            rw [hEq, hcoll]
+          _ = q := by
+            simp
+    · refine ⟨(2 * q - 1) / 3, ?_, ?_⟩
+      · refine ⟨2 * (q / 3) + 1, ?_⟩
+        omega
+      · have hEq : 3 * ((2 * q - 1) / 3) + 1 = 2 ^ 1 * q := by
+          omega
+        have hcoll : collatzExponent ((2 * q - 1) / 3) = 1 := by
+          have hv : v2 (3 * ((2 * q - 1) / 3) + 1) = 1 := by
+            rw [hEq]
+            simpa [pow_one, Nat.mul_comm] using
+              (v2_pow_two_mul_odd (r := 1) hq)
+          simpa [collatzExponent] using hv
+        calc
+          Tstar ((2 * q - 1) / 3) =
+              (3 * ((2 * q - 1) / 3) + 1) /
+                2 ^ collatzExponent ((2 * q - 1) / 3) :=
+            rfl
+          _ = (2 ^ 1 * q) / 2 ^ 1 := by
+            rw [hEq, hcoll]
+          _ = q := by
+            simp
+
+example : ∃ n : ℕ, Odd n ∧ Tstar n = 5 := by
+  refine ⟨3, by native_decide, by native_decide⟩
+
+example : ∃ n : ℕ, Odd n ∧ Tstar n = 7 := by
+  refine ⟨9, by native_decide, by native_decide⟩
+
+example : ¬ (∃ n : ℕ, Odd n ∧ Tstar n = 15) := by
+  intro h
+  have hnot : ¬ 3 ∣ 15 :=
+    (Tstar_has_odd_predecessor_iff_not_three_dvd (q := 15) (by native_decide)).1 h
+  norm_num at hnot
 
 
-theorem runLength_decodeBlockCoord
-    {c : BlockCoord}
+theorem runLength_decodeBlockCoord    {c : BlockCoord}
     (hc : c.Valid) :
     runLength (decodeBlockCoord c) = c.r := by
   rw [runLength, decodeBlockCoord_add_one hc]
