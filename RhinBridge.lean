@@ -1,4 +1,7 @@
 import Mathlib
+import Erdos1135.ND.PhaseGap
+
+open Erdos1135.ND
 
 /-- Critical logarithmic phase for the Collatz/Syracuse block comparison. -/
 def alpha : ℝ := logTwoThree - 1
