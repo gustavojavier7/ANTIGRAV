@@ -17,7 +17,10 @@ integer does not change its distance to the nearest integer. -/
 theorem nearestIntegerNorm_mul_alpha (r : ℕ) :
     nearestIntegerNorm ((r : ℝ) * alpha) =
       nearestIntegerNorm ((r : ℝ) * logTwoThree) := by
-  sorry
+  unfold nearestIntegerNorm alpha
+  rw [mul_sub, mul_one, round_sub_natCast]
+  push_cast
+  congr 1 <;> ring
 
 /-- 4. Rhin's phase gap transferred from `logTwoThree` to the ANTIGRAV
 critical phase `alpha = log₂(3/2)`. -/
