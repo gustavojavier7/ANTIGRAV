@@ -61,6 +61,26 @@ theorem rhin_le_critical_ceil_gap
     (rhin_phase_gap_alpha hgap hr)
     (nearestIntegerNorm_le_ceil_gap ((r : ℝ) * alpha))
 
+/-- Auxiliary logarithmic estimate for lemma 7. For `0 ≤ x ≤ 1/2`, the
+base-2 correction `-log₂(1-x)` is bounded by a linear multiple of `x`. -/
+theorem neg_log_one_sub_div_log_two_le
+    {x : ℝ}
+    (hx0 : 0 ≤ x)
+    (hxhalf : x ≤ (1 / 2 : ℝ)) :
+    -(Real.log (1 - x) / Real.log 2) ≤
+      (2 / Real.log 2) * x := by
+  sorry
+
+/-- Auxiliary exponential-vs-polynomial estimate for lemma 7. The dyadic
+factor `2⁻ʳ` eventually beats the Rhin polynomial scale `r⁻¹³·³`. -/
+theorem two_neg_nat_eventually_lt_rhin_power
+    {c : ℝ}
+    (hc : 0 < c) :
+    ∃ R : ℕ, ∀ r : ℕ, R ≤ r →
+      (2 / Real.log 2) * (2 : ℝ) ^ (-(r : ℤ)) <
+        c * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) := by
+  sorry
+
 /-- 7. The exponentially small correction `-log₂(1 - 2⁻ʳ)` is eventually
 smaller than any positive Rhin polynomial phase gap. -/
 theorem exp_error_eventually_lt_power_gap
@@ -69,7 +89,17 @@ theorem exp_error_eventually_lt_power_gap
     ∃ R : ℕ, ∀ r : ℕ, R ≤ r →
       -(Real.log (1 - (2 : ℝ) ^ (-(r : ℤ))) / Real.log 2) <
         c * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) := by
-  sorry
+  obtain ⟨R, hR⟩ := two_neg_nat_eventually_lt_rhin_power hc
+  refine ⟨max 1 R, ?_⟩
+  intro r hr
+  have hr1 : 1 ≤ r := le_trans (Nat.le_max_left 1 R) hr
+  have hRr : R ≤ r := le_trans (Nat.le_max_right 1 R) hr
+  have hx0 : 0 ≤ (2 : ℝ) ^ (-(r : ℤ)) := by positivity
+  have hxhalf : (2 : ℝ) ^ (-(r : ℤ)) ≤ (1 / 2 : ℝ) := by
+    sorry
+  have hlog := neg_log_one_sub_div_log_two_le hx0 hxhalf
+  have hdom := hR r hRr
+  exact lt_of_le_of_lt hlog hdom
 
 /-- 8. Eventually the ceiling gap above `r * alpha` dominates the correction
 needed to compensate the factor `1 - 2⁻ʳ`. -/
