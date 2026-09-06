@@ -57,7 +57,9 @@ theorem rhin_le_critical_ceil_gap
     (hr : 0 < r) :
     c * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) ≤
       (Int.ceil ((r : ℝ) * alpha) : ℝ) - (r : ℝ) * alpha := by
-  sorry
+  exact le_trans
+    (rhin_phase_gap_alpha hgap hr)
+    (nearestIntegerNorm_le_ceil_gap ((r : ℝ) * alpha))
 
 /-- 7. The exponentially small correction `-log₂(1 - 2⁻ʳ)` is eventually
 smaller than any positive Rhin polynomial phase gap. -/
