@@ -190,4 +190,89 @@ theorem pow_gap_eventually
     ∃ R : ℕ, ∀ r : ℕ, R ≤ r → 0 < r →
       3 ^ r <
         2 ^ (Int.toNat (Int.ceil ((r : ℝ) * alpha))) * (2 ^ r - 1) := by
-  sorry
+  obtain ⟨R, hR⟩ := critical_gap_eventually hc hgap
+  refine ⟨R, ?_⟩
+  intro r hr hpos
+  let v : ℤ := Int.ceil ((r : ℝ) * alpha)
+  have hcrit := hR r hr hpos
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have halpha : 0 < alpha := by
+    rw [alpha_eq_log_two_three_halves]
+    have hnum : 0 < Real.log (3 / 2 : ℝ) := Real.log_pos (by norm_num)
+    exact div_pos hnum hlog2
+  have hr0 : 0 ≤ (r : ℝ) := by positivity
+  have hv0 : 0 ≤ v := by
+    dsimp [v]
+    exact Int.ceil_nonneg.mpr (mul_nonneg hr0 (le_of_lt halpha))
+  have hv_toNat : ((Int.toNat v : ℕ) : ℤ) = v := by
+    exact Int.toNat_of_nonneg hv0
+  have hxhalf : (2 : ℝ) ^ (-(r : ℤ)) ≤ (1 / 2 : ℝ) := by
+    have hr1 : 1 ≤ r := hpos
+    obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le hr1
+    subst r
+    rw [show -(((1 + k : ℕ) : ℤ)) = -(1 : ℤ) - (k : ℤ) by
+      push_cast
+      ring]
+    rw [zpow_sub₀ (by norm_num : (2 : ℝ) ≠ 0)]
+    norm_num
+    exact inv_le_one₀.mpr (by positivity)
+  have hone : 0 < 1 - (2 : ℝ) ^ (-(r : ℤ)) := by
+    linarith
+  have hcrit' :
+      -Real.log (1 - (2 : ℝ) ^ (-(r : ℤ))) <
+        (((v : ℤ) : ℝ) - (r : ℝ) * alpha) * Real.log 2 := by
+    have htmp :
+        (-Real.log (1 - (2 : ℝ) ^ (-(r : ℤ)))) / Real.log 2 <
+          ((v : ℤ) : ℝ) - (r : ℝ) * alpha := by
+      simpa [v, neg_div] using hcrit
+    exact (div_lt_iff₀ hlog2).1 htmp
+  have hlog_form :
+      (r : ℝ) * Real.log (3 / 2 : ℝ) -
+          Real.log (1 - (2 : ℝ) ^ (-(r : ℤ))) <
+        ((v : ℤ) : ℝ) * Real.log 2 := by
+    rw [alpha_eq_log_two_three_halves] at hcrit'
+    field_simp [ne_of_gt hlog2] at hcrit'
+    linarith
+  have hexp := Real.exp_lt_exp.mpr hlog_form
+  have hreal :
+      (3 : ℝ) ^ r <
+        (2 : ℝ) ^ (Int.toNat v) * ((2 : ℝ) ^ r - 1) := by
+    have hpow2 :
+        Real.exp (((v : ℤ) : ℝ) * Real.log 2) =
+          (2 : ℝ) ^ (Int.toNat v) := by
+      rw [← Real.rpow_natCast]
+      rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+      rw [hv_toNat]
+    have hpow3 :
+        Real.exp ((r : ℝ) * Real.log (3 / 2 : ℝ)) =
+          (3 / 2 : ℝ) ^ r := by
+      rw [← Real.rpow_natCast]
+      rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 3 / 2)]
+    have hleft :
+        Real.exp ((r : ℝ) * Real.log (3 / 2 : ℝ) -
+          Real.log (1 - (2 : ℝ) ^ (-(r : ℤ)))) =
+          (3 / 2 : ℝ) ^ r /
+            (1 - (2 : ℝ) ^ (-(r : ℤ))) := by
+      rw [Real.exp_sub, hpow3, Real.exp_log hone]
+    rw [hleft, hpow2] at hexp
+    have h2rpos : 0 < (2 : ℝ) ^ r := by positivity
+    have hzpow : (2 : ℝ) ^ (-(r : ℤ)) = ((2 : ℝ) ^ r)⁻¹ := by
+      rw [zpow_neg]
+      norm_num
+    rw [hzpow] at hexp
+    have hden : 0 < 1 - ((2 : ℝ) ^ r)⁻¹ := by
+      rw [← hzpow]
+      exact hone
+    have hmul := (div_lt_iff₀ hden).1 hexp
+    have hrewrite :
+        (3 / 2 : ℝ) ^ r * (2 : ℝ) ^ r = (3 : ℝ) ^ r := by
+      rw [← mul_pow]
+      norm_num
+    have hfactor :
+        ((2 : ℝ) ^ r) * (1 - ((2 : ℝ) ^ r)⁻¹) =
+          (2 : ℝ) ^ r - 1 := by
+      field_simp
+      ring
+    nlinarith [hrewrite, hfactor, h2rpos]
+  norm_num at hreal ⊢
+  exact_mod_cast hreal
