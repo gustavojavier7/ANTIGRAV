@@ -174,7 +174,12 @@ theorem critical_gap_eventually
     ∃ R : ℕ, ∀ r : ℕ, R ≤ r → 0 < r →
       -(Real.log (1 - (2 : ℝ) ^ (-(r : ℤ))) / Real.log 2) <
         (Int.ceil ((r : ℝ) * alpha) : ℝ) - (r : ℝ) * alpha := by
-  sorry
+  obtain ⟨R, hR⟩ := exp_error_eventually_lt_power_gap hc
+  refine ⟨R, ?_⟩
+  intro r hr hpos
+  have hsmall := hR r hr
+  have hbig := rhin_le_critical_ceil_gap hgap hpos
+  exact lt_of_lt_of_le hsmall hbig
 
 /-- 9. Eventual arithmetic gap: the power of two selected by the critical
 ceiling strictly dominates the Collatz block threshold. -/
