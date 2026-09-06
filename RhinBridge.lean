@@ -31,13 +31,22 @@ theorem rhin_phase_gap_alpha
     (hr : 0 < r) :
     c * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) ≤
       nearestIntegerNorm ((r : ℝ) * alpha) := by
-  sorry
+  have h := hgap.gap r hr
+  rw [← nearestIntegerNorm_mul_alpha r] at h
+  convert h using 1 <;> norm_num
 
 /-- 5. Distance to the nearest integer is bounded above by the distance to the
 ceiling. -/
 theorem nearestIntegerNorm_le_ceil_gap (x : ℝ) :
     nearestIntegerNorm x ≤ (Int.ceil x : ℝ) - x := by
-  sorry
+  unfold nearestIntegerNorm
+  calc
+    |x - (round x : ℝ)| ≤ |x - (Int.ceil x : ℝ)| :=
+      round_le x (Int.ceil x)
+    _ = (Int.ceil x : ℝ) - x := by
+      rw [abs_of_nonneg]
+      · ring
+      · linarith [Int.le_ceil x]
 
 /-- 6. Rhin's polynomial phase gap gives a lower bound for the critical
 ceiling gap used by ANTIGRAV. -/
