@@ -93,7 +93,50 @@ theorem two_neg_nat_eventually_lt_rhin_power
     ∃ R : ℕ, ∀ r : ℕ, R ≤ r →
       (2 / Real.log 2) * (2 : ℝ) ^ (-(r : ℤ)) <
         c * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) := by
-  sorry
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  let ε : ℝ := c * Real.log 2 / 4
+  have hε : 0 < ε := by
+    dsimp [ε]
+    positivity
+  have ho :=
+    is_o_exp_neg_mul_rpow_at_top hlog2 (-(133 / 10 : ℝ))
+  have hb := ho.bound hε
+  rcases Filter.eventually_atTop.1 hb with ⟨X, hX⟩
+  obtain ⟨R, hXR⟩ := exists_nat_ge X
+  refine ⟨max 1 R, ?_⟩
+  intro r hr
+  have hr1 : 1 ≤ r := le_trans (Nat.le_max_left 1 R) hr
+  have hRr : R ≤ r := le_trans (Nat.le_max_right 1 R) hr
+  have hrpos : 0 < (r : ℝ) := by exact_mod_cast hr1
+  have hXr : X ≤ (r : ℝ) := by
+    exact le_trans hXR (by exact_mod_cast hRr)
+  have hbound := hX (r : ℝ) hXr
+  have hzpow :
+      (2 : ℝ) ^ (-(r : ℤ)) =
+        Real.exp (-Real.log 2 * (r : ℝ)) := by
+    rw [← Real.rpow_intCast]
+    rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    push_cast
+    congr 1
+    ring
+  have hrpowpos : 0 < Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) :=
+    Real.rpow_pos_of_pos hrpos _
+  rw [Real.norm_eq_abs, abs_of_pos (Real.exp_pos _),
+      Real.norm_eq_abs, abs_of_pos hrpowpos] at hbound
+  rw [hzpow]
+  have hscaled :
+      (2 / Real.log 2) * Real.exp (-Real.log 2 * (r : ℝ)) ≤
+        (c / 2) * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) := by
+    have hfac : 0 < 2 / Real.log 2 := by positivity
+    have := mul_le_mul_of_nonneg_left hbound (le_of_lt hfac)
+    dsimp [ε] at this
+    convert this using 1 <;> field_simp [ne_of_gt hlog2] <;> ring
+  have hhalf : c / 2 < c := by linarith
+  have hstrict :
+      (c / 2) * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) <
+        c * Real.rpow (r : ℝ) (-(133 / 10 : ℝ)) := by
+    exact mul_lt_mul_of_pos_right hhalf hrpowpos
+  exact lt_of_le_of_lt hscaled hstrict
 
 /-- 7. The exponentially small correction `-log₂(1 - 2⁻ʳ)` is eventually
 smaller than any positive Rhin polynomial phase gap. -/
