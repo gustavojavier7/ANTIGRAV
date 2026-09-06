@@ -153,7 +153,14 @@ theorem exp_error_eventually_lt_power_gap
   have hRr : R ≤ r := le_trans (Nat.le_max_right 1 R) hr
   have hx0 : 0 ≤ (2 : ℝ) ^ (-(r : ℤ)) := by positivity
   have hxhalf : (2 : ℝ) ^ (-(r : ℤ)) ≤ (1 / 2 : ℝ) := by
-    sorry
+    obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le hr1
+    subst r
+    rw [show -(((1 + k : ℕ) : ℤ)) = -(1 : ℤ) - (k : ℤ) by
+      push_cast
+      ring]
+    rw [zpow_sub₀ (by norm_num : (2 : ℝ) ≠ 0)]
+    norm_num
+    exact inv_le_one₀.mpr (by positivity)
   have hlog := neg_log_one_sub_div_log_two_le hx0 hxhalf
   have hdom := hR r hRr
   exact lt_of_le_of_lt hlog hdom
