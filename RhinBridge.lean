@@ -69,7 +69,21 @@ theorem neg_log_one_sub_div_log_two_le
     (hxhalf : x ≤ (1 / 2 : ℝ)) :
     -(Real.log (1 - x) / Real.log 2) ≤
       (2 / Real.log 2) * x := by
-  sorry
+  have hy : 0 < 1 - x := by linarith
+  have hlog : 1 - (1 - x)⁻¹ ≤ Real.log (1 - x) :=
+    Real.one_sub_inv_le_log_of_pos hy
+  have hlin : -2 * x ≤ 1 - (1 - x)⁻¹ := by
+    have hprod : x ≤ 2 * x * (1 - x) := by
+      nlinarith [mul_nonneg hx0 (by linarith : 0 ≤ 1 - 2 * x)]
+    rw [show 1 - (1 - x)⁻¹ = (-x) / (1 - x) by
+      field_simp
+      ring]
+    exact (le_div_iff₀ hy).2 (by nlinarith)
+  have hneg : -Real.log (1 - x) ≤ 2 * x := by
+    linarith
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hdiv := (div_le_div_iff_of_pos_right hlog2).2 hneg
+  convert hdiv using 1 <;> ring
 
 /-- Auxiliary exponential-vs-polynomial estimate for lemma 7. The dyadic
 factor `2⁻ʳ` eventually beats the Rhin polynomial scale `r⁻¹³·³`. -/
