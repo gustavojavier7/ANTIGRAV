@@ -3116,12 +3116,9 @@ theorem localPairResidue_exact_bridge
       omega
     rw [hrewrite]
     exact Nat.mul_div_cancel_left _ (by positivity)
-  rw [hdiv] at hsum ⊢
+  -- `hdiv` rewrites the goal; it does not occur in `hsum`.
+  rw [hdiv]
   exact hsum
-
-
-
-
 
 
 theorem localBridgeQuotient_odd
