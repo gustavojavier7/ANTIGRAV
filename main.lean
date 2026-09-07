@@ -3189,11 +3189,22 @@ theorem localBridgeQuotient_eq_nextCoord_q
           (nextCoord { r := r, q := q }).q := by
     rw [hclose, hnr] at hbridge
     exact hbridge
+  -- Nat subtraction: need 1 ≤ 3^r * q to rearrange
+  -- (3^r * q - 1) + 2^a = 3^r * q + 2^a - 1.
+  have hpos_q : 1 ≤ 3 ^ r * q := by
+    rcases hq with ⟨k, hk⟩
+    have : 0 < 3 ^ r := by positivity
+    omega
   have hlhs :
       3 ^ r * q + 2 ^ a - 1 =
         2 ^ (a + b) *
           (nextCoord { r := r, q := q }).q := by
-    omega
+    calc
+      3 ^ r * q + 2 ^ a - 1 =
+          3 ^ r * q - 1 + 2 ^ a := by omega
+      _ =
+          2 ^ (a + b) *
+            (nextCoord { r := r, q := q }).q := this
   unfold localBridgeQuotient
   rw [hlhs]
   exact Nat.mul_div_cancel_left _ (by positivity)
