@@ -1,0 +1,52 @@
+name: "Copilot Setup Steps"
+
+# Equivalent to `.github/workflows/lean.yml`, for the Copilot cloud agent
+# environment: install Lean/Lake deps and compile `main.lean` before the agent starts.
+#
+# The job MUST be named `copilot-setup-steps` or Copilot will not pick it up.
+# This workflow only takes effect for the agent after it is merged to the default branch.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    # Mathlib + main.lean can take a while on a cold cache.
+    timeout-minutes: 59
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Same setup as Lean 4 CI (`lean.yml`): toolchain from lean-toolchain,
+      # packages from lake-manifest.json. Do not run lake build of the Antigrav
+      # lib target; the corpus check is `lake env lean main.lean`.
+      - name: Setup Lean
+        uses: leanprover/lean-action@v1
+        with:
+          build: "false"
+
+      # Best-effort mathlib oleans cache (speeds up subsequent compiles).
+      - name: Fetch mathlib build cache
+        run: lake exe cache get || true
+
+      - name: Check main.lean
+        run: lake env lean main.lean
+
+      - name: Report Lean version and toolchain
+        run: |
+          LEAN_VER=$(lean --version)
+          TOOLCHAIN=$(cat lean-toolchain)
+          echo "### Copilot setup — Lean 4 compile"
+          echo "* Lean: $LEAN_VER"
+          echo "* lean-toolchain: $TOOLCHAIN"
+          echo "* check: lake env lean main.lean"
