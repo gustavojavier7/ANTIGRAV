@@ -3390,11 +3390,27 @@ theorem nextCoord_eq_of_localPairResidue
     localPairResidue_sufficient hr hq ha hb hres
   have hq1 :=
     localBridgeQuotient_eq_nextCoord_q hr hq ha hb hres
-  -- Fieldwise equality via ext_iff (avoids eta-collapsed rewrites).
-  refine (BlockCoord.ext_iff
-      (nextCoord { r := r, q := q })
-      ({ r := b, q := localBridgeQuotient r q a b } : BlockCoord)).2 ?_
-  exact ⟨hpair.2, hq1.symm⟩
+  -- Prove mk-equality on projections, then transfer by eta (as a term).
+  have hfields :
+      ({
+        r := (nextCoord { r := r, q := q }).r
+        q := (nextCoord { r := r, q := q }).q
+      } : BlockCoord) =
+        ({ r := b, q := localBridgeQuotient r q a b } : BlockCoord) := by
+    cases hpair with
+    | intro _ hrn =>
+      -- Goal is mk.injEq of two constructors.
+      simp only [BlockCoord.mk.injEq]
+      exact ⟨hrn, hq1.symm⟩
+  -- eta: x = { r := x.r, q := x.q }
+  have heta :
+      nextCoord { r := r, q := q } =
+        ({
+          r := (nextCoord { r := r, q := q }).r
+          q := (nextCoord { r := r, q := q }).q
+        } : BlockCoord) :=
+    rfl
+  exact heta.trans hfields
 
 
 
