@@ -3198,9 +3198,12 @@ theorem localBridgeQuotient_eq_nextCoord_q
       3 ^ r * q + 2 ^ a - 1 =
         2 ^ (a + b) *
           (nextCoord { r := r, q := q }).q := by
-    -- `sub_add_comm`: n - m + k = n + k - m; rewrite unifies k = 2^a.
-    rw [← Nat.sub_add_comm hpos_q]
-    exact hbridge'
+    -- Explicit params: n - m + k = n + k - m.
+    have hcomm :
+        3 ^ r * q - 1 + 2 ^ a =
+          3 ^ r * q + 2 ^ a - 1 :=
+      Nat.sub_add_comm (n := 3 ^ r * q) (m := 1) (k := 2 ^ a) hpos_q
+    exact hcomm.symm.trans hbridge'
   unfold localBridgeQuotient
   rw [hlhs]
   exact Nat.mul_div_cancel_left _ (by positivity)
