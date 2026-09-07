@@ -3392,11 +3392,11 @@ theorem nextCoord_eq_of_localPairResidue
     localBridgeQuotient_eq_nextCoord_q hr hq ha hb hres
   -- Force field view (eta hides projections under bare `nextCoord`).
   change
-    {
+    ({
       r := (nextCoord { r := r, q := q }).r
       q := (nextCoord { r := r, q := q }).q
-    } =
-      { r := b, q := localBridgeQuotient r q a b }
+    } : BlockCoord) =
+      ({ r := b, q := localBridgeQuotient r q a b } : BlockCoord)
   rw [hpair.2, hq1.symm]
 
 
