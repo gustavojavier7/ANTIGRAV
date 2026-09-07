@@ -3390,10 +3390,15 @@ theorem nextCoord_eq_of_localPairResidue
     localPairResidue_sufficient hr hq ha hb hres
   have hq1 :=
     localBridgeQuotient_eq_nextCoord_q hr hq ha hb hres
-  -- Avoid structure `rw` in calc: assemble fieldwise.
-  refine BlockCoord.ext ?_ ?_
-  · exact hpair.2
-  · exact hq1.symm
+  -- Expand then rewrite fields (avoids structure-calc / ext quirks).
+  have hform :
+      nextCoord { r := r, q := q } =
+        {
+          r := (nextCoord { r := r, q := q }).r
+          q := (nextCoord { r := r, q := q }).q
+        } :=
+    rfl
+  rw [hform, hpair.2, hq1.symm]
 
 
 
