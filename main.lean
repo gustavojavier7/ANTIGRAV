@@ -3317,33 +3317,28 @@ theorem localPairResidue_lift_modulus
 
 theorem localPairResidue_of_modEq_q
     {r q q' a b : ℕ}
-    (ha : 1 ≤ a)
-    (hb : 1 ≤ b)
+    (_ha : 1 ≤ a)
+    (_hb : 1 ≤ b)
     (hres : LocalPairResidue r q a b)
     (hq :
       Nat.ModEq (localPairModulus a b) q q') :
     LocalPairResidue r q' a b := by
   unfold LocalPairResidue at hres ⊢
-  change q % localPairModulus a b =
-      q' % localPairModulus a b at hq
+  -- Prefer ModEq transport over raw mul_mod rewrites (avoids double-mod goals).
   have hmul :
-      (3 ^ r * q) % localPairModulus a b =
-        (3 ^ r * q') % localPairModulus a b := by
-    rw [Nat.mul_mod, Nat.mul_mod, hq]
-  calc
-    (3 ^ r * q' + 2 ^ a) % localPairModulus a b =
-        ((3 ^ r * q') % localPairModulus a b +
-          (2 ^ a) % localPairModulus a b) %
-            localPairModulus a b := Nat.add_mod _ _ _
-    _ =
-        ((3 ^ r * q) % localPairModulus a b +
-          (2 ^ a) % localPairModulus a b) %
-            localPairModulus a b := by rw [hmul]
-    _ =
-        (3 ^ r * q + 2 ^ a) %
-          localPairModulus a b :=
-            (Nat.add_mod _ _ _).symm
-    _ = localPairRHS a b := hres
+      Nat.ModEq (localPairModulus a b)
+        (3 ^ r * q) (3 ^ r * q') :=
+    hq.mul_left (3 ^ r)
+  have hadd :
+      Nat.ModEq (localPairModulus a b)
+        (3 ^ r * q + 2 ^ a) (3 ^ r * q' + 2 ^ a) :=
+    hmul.add_right (2 ^ a)
+  -- ModEq is definitionally equality of remainders.
+  change
+      (3 ^ r * q + 2 ^ a) % localPairModulus a b =
+        (3 ^ r * q' + 2 ^ a) % localPairModulus a b at hadd
+  rw [← hadd]
+  exact hres
 
 
 
