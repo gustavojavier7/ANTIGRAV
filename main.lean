@@ -3189,23 +3189,27 @@ theorem localBridgeQuotient_eq_nextCoord_q
           (nextCoord { r := r, q := q }).q := by
     rw [hclose, hnr] at hbridge
     exact hbridge
-  -- Avoid omega on a large context: rearrange Nat subtraction explicitly.
+  -- Avoid omega/add_sub_assoc signature ambiguity on large context.
   have hpos_q : 1 ≤ 3 ^ r * q := by
     have h3 : 1 ≤ 3 ^ r :=
       Nat.one_le_pow r 3 (by norm_num)
     exact h3.trans (Nat.le_mul_of_pos_right (3 ^ r) (Odd.pos hq))
+  -- Local Nat identity: 1 ≤ x → x + y - 1 = x - 1 + y.
+  have hadd_sub_one (x y : ℕ) (hx : 1 ≤ x) :
+      x + y - 1 = x - 1 + y := by
+    calc
+      x + y - 1
+          = (x - 1 + 1) + y - 1 := by rw [Nat.sub_add_cancel hx]
+      _ = (x - 1) + (1 + y) - 1 := by rw [Nat.add_assoc]
+      _ = (x - 1) + (y + 1) - 1 := by rw [Nat.add_comm 1]
+      _ = ((x - 1) + y) + 1 - 1 := by rw [← Nat.add_assoc]
+      _ = (x - 1) + y := by rw [Nat.add_sub_cancel]
   have hlhs :
       3 ^ r * q + 2 ^ a - 1 =
         2 ^ (a + b) *
           (nextCoord { r := r, q := q }).q := by
-    -- Named params avoid rewrite-matching ambiguity:
-    -- n + m - k = n - k + m when k ≤ n.
-    have hrearr :
-        3 ^ r * q + 2 ^ a - 1 =
-          3 ^ r * q - 1 + 2 ^ a :=
-      Nat.add_sub_assoc
-        (n := 3 ^ r * q) (m := 2 ^ a) (k := 1) hpos_q
-    exact hrearr.trans hbridge'
+    rw [hadd_sub_one _ _ hpos_q]
+    exact hbridge'
   unfold localBridgeQuotient
   rw [hlhs]
   exact Nat.mul_div_cancel_left _ (by positivity)
