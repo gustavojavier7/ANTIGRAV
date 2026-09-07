@@ -2990,6 +2990,906 @@ theorem localPair_q_modEq_unique
 
 
 
+
+/-!
+  Local triples: two consecutive bridges.
+
+  Pattern `(r,a) → (b,e) → c` is realized by chaining two
+  `LocalPairResidue` constraints via the first-bridge quotient.
+  Strategy B reuses the pair corpus; the composite congruence
+  is kept only as an optional algebraic image.
+-/
+
+
+
+
+
+
+def localBridgeQuotient (r q a b : ℕ) : ℕ :=
+  (3 ^ r * q + 2 ^ a - 1) / 2 ^ (a + b)
+
+
+
+
+
+
+def localTripleModulus (a b e c : ℕ) : ℕ :=
+  2 ^ (a + b + e + c + 1)
+
+
+
+
+
+
+def localTripleLHS (r q a b e : ℕ) : ℕ :=
+  3 ^ (r + b) * q + 3 ^ b * 2 ^ a + 2 ^ (a + b + e)
+
+
+
+
+
+
+def localTripleRHS (a b e c : ℕ) : ℕ :=
+  3 ^ b + 2 ^ (a + b) + 2 ^ (a + b + e + c)
+
+
+
+
+
+
+def LocalTripleResidue
+    (r q a b e c : ℕ) : Prop :=
+  LocalPairResidue r q a b ∧
+    LocalPairResidue
+      b (localBridgeQuotient r q a b) e c
+
+
+
+
+
+
+def LocalTripleCompositeCongruence
+    (r q a b e c : ℕ) : Prop :=
+  localTripleLHS r q a b e %
+      localTripleModulus a b e c =
+    localTripleRHS a b e c %
+      localTripleModulus a b e c
+
+
+
+
+
+
+def RealizesLocalTriple
+    (x : BlockCoord) (a b e c : ℕ) : Prop :=
+  coordClosingValuation x = a ∧
+  (nextCoord x).r = b ∧
+  coordClosingValuation (nextCoord x) = e ∧
+  (nextCoord (nextCoord x)).r = c
+
+
+
+
+
+
+instance instDecidableLocalTripleResidue
+    (r q a b e c : ℕ) :
+    Decidable (LocalTripleResidue r q a b e c) := by
+  unfold LocalTripleResidue
+  infer_instance
+
+
+
+
+
+
+theorem localPairResidue_exact_bridge
+    {r q a b : ℕ}
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b) :
+    3 ^ r * q + 2 ^ a =
+      1 + 2 ^ (a + b) *
+        localBridgeQuotient r q a b := by
+  rcases localPairResidue_decomposition ha hb hres with
+    ⟨k, hdecomp⟩
+  have hsum :
+      3 ^ r * q + 2 ^ a =
+        1 + 2 ^ (a + b) * (2 * k + 1) := by
+    calc
+      3 ^ r * q + 2 ^ a =
+          1 + 2 ^ (a + b) +
+            2 ^ (a + b + 1) * k := hdecomp
+      _ = 1 + 2 ^ (a + b) * (2 * k + 1) := by
+        rw [show a + b + 1 = (a + b) + 1 by omega,
+          pow_succ]
+        ring
+  have hpos : 1 ≤ 3 ^ r * q + 2 ^ a := by
+    have : 0 < 2 ^ a := by positivity
+    omega
+  have hdiv :
+      localBridgeQuotient r q a b = 2 * k + 1 := by
+    unfold localBridgeQuotient
+    have hrewrite :
+        3 ^ r * q + 2 ^ a - 1 =
+          2 ^ (a + b) * (2 * k + 1) := by
+      omega
+    rw [hrewrite]
+    exact Nat.mul_div_cancel_left _ (by positivity)
+  rw [hdiv] at hsum ⊢
+  exact hsum
+
+
+
+
+
+
+theorem localBridgeQuotient_odd
+    {r q a b : ℕ}
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b) :
+    Odd (localBridgeQuotient r q a b) := by
+  rcases localPairResidue_decomposition ha hb hres with
+    ⟨k, hdecomp⟩
+  have hsum :
+      3 ^ r * q + 2 ^ a =
+        1 + 2 ^ (a + b) * (2 * k + 1) := by
+    calc
+      3 ^ r * q + 2 ^ a =
+          1 + 2 ^ (a + b) +
+            2 ^ (a + b + 1) * k := hdecomp
+      _ = 1 + 2 ^ (a + b) * (2 * k + 1) := by
+        rw [show a + b + 1 = (a + b) + 1 by omega,
+          pow_succ]
+        ring
+  have hdiv :
+      localBridgeQuotient r q a b = 2 * k + 1 := by
+    unfold localBridgeQuotient
+    have hrewrite :
+        3 ^ r * q + 2 ^ a - 1 =
+          2 ^ (a + b) * (2 * k + 1) := by
+      have hpos : 1 ≤ 3 ^ r * q + 2 ^ a := by
+        have : 0 < 2 ^ a := by positivity
+        omega
+      omega
+    rw [hrewrite]
+    exact Nat.mul_div_cancel_left _ (by positivity)
+  rw [hdiv]
+  exact ⟨k, rfl⟩
+
+
+
+
+
+
+theorem localBridgeQuotient_eq_nextCoord_q
+    {r q a b : ℕ}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b) :
+    localBridgeQuotient r q a b =
+      (nextCoord { r := r, q := q }).q := by
+  have hpair :=
+    localPairResidue_sufficient hr hq ha hb hres
+  have hc : ({ r := r, q := q } : BlockCoord).Valid :=
+    ⟨hr, hq⟩
+  have hexact :=
+    localPairResidue_exact_bridge ha hb hres
+  have hbridge := coord_bridge_equation hc
+  unfold coordBridgeNumerator coordNumerator at hbridge
+  have hnumpos := coordNumerator_pos hc
+  unfold coordNumerator at hnumpos
+  have hclose : coordClosingValuation { r := r, q := q } = a :=
+    hpair.1
+  have hnr : (nextCoord { r := r, q := q }).r = b :=
+    hpair.2
+  have :
+      3 ^ r * q - 1 + 2 ^ a =
+        2 ^ (a + b) *
+          (nextCoord { r := r, q := q }).q := by
+    rw [hclose, hnr] at hbridge
+    exact hbridge
+  have hlhs :
+      3 ^ r * q + 2 ^ a - 1 =
+        2 ^ (a + b) *
+          (nextCoord { r := r, q := q }).q := by
+    omega
+  unfold localBridgeQuotient
+  rw [hlhs]
+  exact Nat.mul_div_cancel_left _ (by positivity)
+
+
+
+
+
+
+theorem localBridgeQuotient_lift
+    {r q a b m : ℕ}
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b) :
+    localBridgeQuotient
+        r (q + m * localPairModulus a b) a b =
+      localBridgeQuotient r q a b +
+        2 * 3 ^ r * m := by
+  have hexact :=
+    localPairResidue_exact_bridge ha hb hres
+  unfold localPairModulus at hexact ⊢
+  have hres' :
+      LocalPairResidue
+        r (q + m * 2 ^ (a + b + 1)) a b := by
+    unfold LocalPairResidue localPairModulus at hres ⊢
+    have :
+        (3 ^ r * (q + m * 2 ^ (a + b + 1)) + 2 ^ a) %
+            2 ^ (a + b + 1) =
+          (3 ^ r * q + 2 ^ a +
+              3 ^ r * m * 2 ^ (a + b + 1)) %
+            2 ^ (a + b + 1) := by
+      ring_nf
+    rw [this]
+    rw [Nat.add_mul_mod_self_right]
+    exact hres
+  have hexact' :=
+    localPairResidue_exact_bridge ha hb hres'
+  have hcalc :
+      3 ^ r * (q + m * 2 ^ (a + b + 1)) + 2 ^ a =
+        1 + 2 ^ (a + b) *
+          (localBridgeQuotient r q a b +
+            2 * 3 ^ r * m) := by
+    calc
+      3 ^ r * (q + m * 2 ^ (a + b + 1)) + 2 ^ a =
+          3 ^ r * q + 2 ^ a +
+            3 ^ r * m * 2 ^ (a + b + 1) := by ring
+      _ =
+          1 + 2 ^ (a + b) * localBridgeQuotient r q a b +
+            3 ^ r * m * 2 ^ (a + b + 1) := by
+        rw [hexact]
+      _ =
+          1 + 2 ^ (a + b) *
+            (localBridgeQuotient r q a b +
+              2 * 3 ^ r * m) := by
+        rw [show a + b + 1 = (a + b) + 1 by omega,
+          pow_succ]
+        ring
+  have hpos :
+      1 ≤
+        3 ^ r * (q + m * 2 ^ (a + b + 1)) + 2 ^ a := by
+    have : 0 < 2 ^ a := by positivity
+    omega
+  unfold localBridgeQuotient at hexact' ⊢
+  have hdiv :
+      (3 ^ r * (q + m * 2 ^ (a + b + 1)) + 2 ^ a - 1) /
+          2 ^ (a + b) =
+        localBridgeQuotient r q a b +
+          2 * 3 ^ r * m := by
+    have hrewrite :
+        3 ^ r * (q + m * 2 ^ (a + b + 1)) + 2 ^ a - 1 =
+          2 ^ (a + b) *
+            (localBridgeQuotient r q a b +
+              2 * 3 ^ r * m) := by
+      omega
+    rw [hrewrite]
+    exact Nat.mul_div_cancel_left _ (by positivity)
+  -- `localBridgeQuotient` on the left of the goal is already unfolded above
+  simpa [localBridgeQuotient] using hdiv
+
+
+
+
+
+
+theorem localPairResidue_lift_modulus
+    {r q a b m : ℕ}
+    (hres : LocalPairResidue r q a b) :
+    LocalPairResidue
+      r (q + m * localPairModulus a b) a b := by
+  unfold LocalPairResidue at hres ⊢
+  have :
+      (3 ^ r * (q + m * localPairModulus a b) + 2 ^ a) %
+          localPairModulus a b =
+        (3 ^ r * q + 2 ^ a +
+            3 ^ r * m * localPairModulus a b) %
+          localPairModulus a b := by
+    ring_nf
+  rw [this, Nat.add_mul_mod_self_right]
+  exact hres
+
+
+
+
+
+
+theorem localPairResidue_of_modEq_q
+    {r q q' a b : ℕ}
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b)
+    (hq :
+      Nat.ModEq (localPairModulus a b) q q') :
+    LocalPairResidue r q' a b := by
+  unfold LocalPairResidue at hres ⊢
+  change q % localPairModulus a b =
+      q' % localPairModulus a b at hq
+  have hmul :
+      (3 ^ r * q) % localPairModulus a b =
+        (3 ^ r * q') % localPairModulus a b := by
+    rw [Nat.mul_mod, Nat.mul_mod, hq]
+  calc
+    (3 ^ r * q' + 2 ^ a) % localPairModulus a b =
+        ((3 ^ r * q') % localPairModulus a b +
+          (2 ^ a) % localPairModulus a b) %
+            localPairModulus a b := Nat.add_mod _ _ _
+    _ =
+        ((3 ^ r * q) % localPairModulus a b +
+          (2 ^ a) % localPairModulus a b) %
+            localPairModulus a b := by rw [hmul]
+    _ =
+        (3 ^ r * q + 2 ^ a) %
+          localPairModulus a b :=
+            (Nat.add_mod _ _ _).symm
+    _ = localPairRHS a b := hres
+
+
+
+
+
+
+theorem localTripleResidue_of_coord
+    {x : BlockCoord}
+    (hx : x.Valid) :
+    LocalTripleResidue
+      x.r
+      x.q
+      (coordClosingValuation x)
+      (nextCoord x).r
+      (coordClosingValuation (nextCoord x))
+      (nextCoord (nextCoord x)).r := by
+  refine ⟨localPairResidue_of_coord hx, ?_⟩
+  have hx1 : (nextCoord x).Valid := nextCoord_valid hx
+  have hpair1 := localPairResidue_of_coord hx
+  have hq1 :
+      localBridgeQuotient
+          x.r x.q
+          (coordClosingValuation x)
+          (nextCoord x).r =
+        (nextCoord x).q :=
+    localBridgeQuotient_eq_nextCoord_q
+      hx.1 hx.2
+      (coordClosingValuation_pos hx)
+      (nextCoord_valid hx).1
+      hpair1
+  simpa [hq1] using localPairResidue_of_coord hx1
+
+
+
+
+
+
+theorem nextCoord_eq_of_localPairResidue
+    {r q a b : ℕ}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b) :
+    nextCoord { r := r, q := q } =
+      { r := b,
+        q := localBridgeQuotient r q a b } := by
+  have hpair :=
+    localPairResidue_sufficient hr hq ha hb hres
+  have hq1 :=
+    localBridgeQuotient_eq_nextCoord_q hr hq ha hb hres
+  calc
+    nextCoord { r := r, q := q } =
+        {
+          r := (nextCoord { r := r, q := q }).r
+          q := (nextCoord { r := r, q := q }).q
+        } := rfl
+    _ =
+        {
+          r := b
+          q := localBridgeQuotient r q a b
+        } := by
+          rw [hpair.2, hq1]
+
+
+
+
+
+
+theorem localTripleResidue_sufficient
+    {r q a b e c : ℕ}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (he : 1 ≤ e)
+    (hc : 1 ≤ c)
+    (hres : LocalTripleResidue r q a b e c) :
+    RealizesLocalTriple
+      { r := r, q := q } a b e c := by
+  rcases hres with ⟨h1, h2⟩
+  have hpair :=
+    localPairResidue_sufficient hr hq ha hb h1
+  have hq1odd :=
+    localBridgeQuotient_odd ha hb h1
+  have hpair2 :=
+    localPairResidue_sufficient
+      (r := b) hq1odd he hc h2
+  have hxnext :=
+    nextCoord_eq_of_localPairResidue hr hq ha hb h1
+  refine ⟨hpair.1, hpair.2, ?_, ?_⟩
+  · rw [hxnext]
+    exact hpair2.1
+  · rw [hxnext]
+    exact hpair2.2
+
+
+
+
+
+
+theorem localTripleResidue_iff
+    {r q a b e c : ℕ}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (he : 1 ≤ e)
+    (hc : 1 ≤ c) :
+    LocalTripleResidue r q a b e c ↔
+      RealizesLocalTriple
+        { r := r, q := q } a b e c := by
+  constructor
+  · exact localTripleResidue_sufficient hr hq ha hb he hc
+  · intro hreal
+    have hc0 : ({ r := r, q := q } : BlockCoord).Valid :=
+      ⟨hr, hq⟩
+    have hres := localTripleResidue_of_coord hc0
+    rcases hreal with ⟨h1, h2, h3, h4⟩
+    rw [h1, h2, h3, h4] at hres
+    exact hres
+
+
+
+
+
+
+theorem three_pow_coprime_localTripleModulus
+    (r a b e c : ℕ) :
+    Nat.Coprime
+      (3 ^ (r + b))
+      (localTripleModulus a b e c) := by
+  unfold localTripleModulus
+  exact
+    Nat.Coprime.pow_right (a + b + e + c + 1)
+      (Nat.Coprime.pow_left (r + b) (by norm_num))
+
+
+
+
+
+
+theorem three_pow_coprime_pow_two
+    (k N : ℕ) :
+    Nat.Coprime (3 ^ k) (2 ^ N) := by
+  exact
+    Nat.Coprime.pow_right N
+      (Nat.Coprime.pow_left k (by norm_num))
+
+
+
+
+
+
+def localTripleFixed (a b e : ℕ) : ℕ :=
+  3 ^ b * 2 ^ a + 2 ^ (a + b + e)
+
+
+
+
+
+
+/--
+  Existence by 2-adic lifting of pair residues (strategy B):
+
+  * choose any first-pair seed `q₀` realizing `(a,b)`;
+  * choose any second-pair target `q₁` realizing `(e,c)` at run-length `b`;
+  * refine `q₀` by a multiple of `2^{a+b+1}` so the bridge quotient
+    meets the class of `q₁` modulo `2^{e+c+1}`.
+
+  The halved congruence inverts only the odd unit `3^r` modulo
+  `2^{e+c}` (never inverts `2`).
+-/
+theorem exists_odd_q_localTripleResidue
+    {r a b e c : ℕ}
+    (_hr : 1 ≤ r)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (he : 1 ≤ e)
+    (hc : 1 ≤ c) :
+    ∃ q : ℕ,
+      Odd q ∧
+      LocalTripleResidue r q a b e c := by
+  rcases exists_odd_q_localPairResidue
+      (r := b) hb he hc with
+    ⟨q₁, hq₁, hres₁⟩
+  rcases exists_odd_q_localPairResidue
+      (r := r) _hr ha hb with
+    ⟨q₀, hq₀, hres₀⟩
+  let q₁₀ : ℕ := localBridgeQuotient r q₀ a b
+  have hq₁₀odd : Odd q₁₀ :=
+    localBridgeQuotient_odd ha hb hres₀
+  let M₂ : ℕ := localPairModulus e c
+  let Mhalf : ℕ := 2 ^ (e + c)
+  have hMhalf : NeZero Mhalf := ⟨by
+    dsimp [Mhalf]
+    positivity⟩
+  -- Non-negative representative of q₁ - q₁₀ mod M₂.
+  let Q : ℕ := q₁ + q₁₀ * M₂
+  have hQmod :
+      Nat.ModEq M₂ Q q₁ := by
+    dsimp [Q]
+    change (q₁ + q₁₀ * M₂) % M₂ = q₁ % M₂
+    rw [Nat.add_mul_mod_self_right]
+  have hQge : q₁₀ ≤ Q := by
+    dsimp [Q]
+    exact Nat.le_add_left _ _
+  let d : ℕ := Q - q₁₀
+  have hd_even : Even d := by
+    rcases hq₁ with ⟨u, hu⟩
+    rcases hq₁₀odd with ⟨v, hv⟩
+    have hrepr :
+        d = q₁ + q₁₀ * 2 ^ (e + c + 1) - q₁₀ := by
+      dsimp [d, Q, M₂, localPairModulus]
+      rfl
+    -- d = (2u+1) + (2v+1)*2^{e+c+1} - (2v+1)
+    --   = 2u + (2v+1)*2^{e+c+1} - 2v
+    --   = 2*(u - v + (2v+1)*2^{e+c})
+    refine ⟨u + (2 * v + 1) * 2 ^ (e + c) - v, ?_⟩
+    rw [hrepr, hu, hv, pow_succ]
+    omega
+  let d' : ℕ := d / 2
+  have hdd' : d = 2 * d' := by
+    dsimp [d']
+    exact (Even.two_mul_div_two hd_even).symm
+  -- Solve 3^r * m ≡ d' (mod 2^{e+c}).
+  have hu3 :
+      IsUnit (((3 ^ r : ℕ) : ZMod Mhalf)) := by
+    exact
+      (ZMod.isUnit_iff_coprime (3 ^ r) Mhalf).2
+        (by
+          simpa [Mhalf] using
+            three_pow_coprime_pow_two r (e + c))
+  rcases hu3 with ⟨u3, hu3val⟩
+  let x : ZMod Mhalf :=
+    ((u3⁻¹ : (ZMod Mhalf)ˣ) : ZMod Mhalf) *
+      ((d' : ℕ) : ZMod Mhalf)
+  let m : ℕ := @ZMod.val Mhalf x
+  have hmcast : ((m : ℕ) : ZMod Mhalf) = x := by
+    dsimp [m]
+    exact @ZMod.natCast_zmod_val Mhalf hMhalf x
+  have hmx :
+      ((3 ^ r : ℕ) : ZMod Mhalf) * x =
+        ((d' : ℕ) : ZMod Mhalf) := by
+    rw [← hu3val]
+    dsimp [x]
+    simp [← mul_assoc]
+  have hmod_half :
+      Nat.ModEq Mhalf (3 ^ r * m) d' := by
+    refine
+      (ZMod.natCast_eq_natCast_iff
+        (3 ^ r * m) d' Mhalf).mp ?_
+    rw [Nat.cast_mul, hmcast]
+    exact hmx
+  -- Hence 2 * 3^r * m ≡ d (mod 2^{e+c+1}).
+  have hmod_full :
+      Nat.ModEq M₂ (2 * 3 ^ r * m) d := by
+    have hMeq : M₂ = 2 * Mhalf := by
+      dsimp [M₂, Mhalf, localPairModulus]
+      rw [pow_succ]
+      ring
+    have hm2 :
+        Nat.ModEq (2 * Mhalf)
+          (2 * (3 ^ r * m)) (2 * d') :=
+      (hmod_half.mul_left 2)
+    rw [hMeq, hdd']
+    simpa [mul_assoc] using hm2
+  let q : ℕ := q₀ + m * localPairModulus a b
+  have hres0' :
+      LocalPairResidue r q a b :=
+    localPairResidue_lift_modulus (m := m) hres₀
+  have hbridge :
+      localBridgeQuotient r q a b =
+        q₁₀ + 2 * 3 ^ r * m := by
+    dsimp [q, q₁₀]
+    exact localBridgeQuotient_lift ha hb hres₀
+  have hbridge_mod :
+      Nat.ModEq M₂
+        (localBridgeQuotient r q a b) q₁ := by
+    rw [hbridge]
+    have hadd :
+        Nat.ModEq M₂
+          (q₁₀ + 2 * 3 ^ r * m)
+          (q₁₀ + d) :=
+      hmod_full.add_left q₁₀
+    have hsum : q₁₀ + d = Q := by
+      dsimp [d]
+      exact Nat.add_sub_cancel' hQge
+    have htoQ : Nat.ModEq M₂ (q₁₀ + d) Q := by
+      rw [hsum]
+    exact hadd.trans (htoQ.trans hQmod)
+  have hres1' :
+      LocalPairResidue
+        b (localBridgeQuotient r q a b) e c :=
+    localPairResidue_of_modEq_q
+      he hc hres₁ hbridge_mod.symm
+  have hqodd : Odd q := by
+    dsimp [q]
+    rcases hq₀ with ⟨t, ht⟩
+    refine ⟨t + m * 2 ^ (a + b), ?_⟩
+    rw [ht]
+    unfold localPairModulus
+    rw [show a + b + 1 = (a + b) + 1 by omega, pow_succ]
+    ring
+  exact ⟨q, hqodd, ⟨hres0', hres1'⟩⟩
+
+
+
+
+
+
+theorem every_positive_local_triple_realizable
+    {r a b e c : ℕ}
+    (hr : 1 ≤ r)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (he : 1 ≤ e)
+    (hc : 1 ≤ c) :
+    ∃ q : ℕ,
+      Odd q ∧
+      coordClosingValuation
+        { r := r, q := q } = a ∧
+      (nextCoord
+        { r := r, q := q }).r = b ∧
+      coordClosingValuation
+        (nextCoord { r := r, q := q }) = e ∧
+      (nextCoord
+        (nextCoord
+          { r := r, q := q })).r = c := by
+  rcases
+      exists_odd_q_localTripleResidue
+        hr ha hb he hc with
+    ⟨q, hq, hres⟩
+  rcases
+      localTripleResidue_sufficient
+        hr hq ha hb he hc hres with
+    ⟨h1, h2, h3, h4⟩
+  exact ⟨q, hq, h1, h2, h3, h4⟩
+
+
+
+
+
+
+theorem every_positive_local_triple_realizable_coord
+    {r a b e c : ℕ}
+    (hr : 1 ≤ r)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (he : 1 ≤ e)
+    (hc : 1 ≤ c) :
+    ∃ x : BlockCoord,
+      x.Valid ∧
+      x.r = r ∧
+      RealizesLocalTriple x a b e c := by
+  rcases
+      every_positive_local_triple_realizable
+        hr ha hb he hc with
+    ⟨q, hq, h1, h2, h3, h4⟩
+  refine ⟨{ r := r, q := q }, ?_⟩
+  exact ⟨⟨hr, hq⟩, rfl, h1, h2, h3, h4⟩
+
+
+
+
+
+
+/-!
+  Finite-pattern architecture (definitions only).
+
+  A local step stores the closing valuation and the *next* run-length.
+  A bare `List ℕ` of run-lengths omits the closings demanded by each bridge
+  equation, so induction is stated on `LocalPattern` instead.
+
+  No existence theorem for arbitrary finite patterns is claimed here.
+  The intended inductive step is 2-adic refinement of `q` extending a
+  realized prefix by one positive `LocalStep`, reusing `LocalPairResidue`.
+-/
+
+
+
+
+
+
+structure LocalStep where
+  closing : ℕ
+  nextR : ℕ
+  deriving DecidableEq, Repr
+
+
+
+
+
+
+structure LocalPattern where
+  headR : ℕ
+  steps : List LocalStep
+  deriving DecidableEq, Repr
+
+
+
+
+
+
+def PositiveLocalStep (s : LocalStep) : Prop :=
+  1 ≤ s.closing ∧ 1 ≤ s.nextR
+
+
+
+
+
+
+def PositiveLocalPattern (p : LocalPattern) : Prop :=
+  1 ≤ p.headR ∧
+    ∀ s ∈ p.steps, PositiveLocalStep s
+
+
+
+
+
+
+def RealizesLocalSteps
+    (x : BlockCoord) : List LocalStep → Prop
+  | [] => True
+  | s :: tail =>
+      coordClosingValuation x = s.closing ∧
+      (nextCoord x).r = s.nextR ∧
+      RealizesLocalSteps (nextCoord x) tail
+
+
+
+
+
+
+def RealizesLocalPattern
+    (x : BlockCoord) (p : LocalPattern) : Prop :=
+  x.r = p.headR ∧
+    RealizesLocalSteps x p.steps
+
+
+
+
+
+
+/--
+  Pair pattern as a one-step `LocalPattern`.
+-/
+def localPairPattern (r a b : ℕ) : LocalPattern :=
+  { headR := r
+    steps := [{ closing := a, nextR := b }] }
+
+
+
+
+
+
+/--
+  Triple pattern as a two-step `LocalPattern`.
+-/
+def localTriplePattern (r a b e c : ℕ) : LocalPattern :=
+  { headR := r
+    steps :=
+      [ { closing := a, nextR := b }
+      , { closing := e, nextR := c } ] }
+
+
+
+
+
+
+theorem realizesLocalPattern_pair_iff
+    {r q a b : ℕ}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b) :
+    RealizesLocalPattern
+        { r := r, q := q }
+        (localPairPattern r a b) ↔
+      LocalPairResidue r q a b := by
+  constructor
+  · intro h
+    rcases h with ⟨hr0, hsteps⟩
+    dsimp [localPairPattern, RealizesLocalSteps] at hsteps
+    rcases hsteps with ⟨hclose, hnext, _⟩
+    exact
+      (localPairResidue_iff hr hq ha hb).2 ⟨hclose, hnext⟩
+  · intro hres
+    refine ⟨rfl, ?_⟩
+    dsimp [localPairPattern, RealizesLocalSteps]
+    rcases
+        localPairResidue_sufficient hr hq ha hb hres with
+      ⟨hclose, hnext⟩
+    exact ⟨hclose, hnext, trivial⟩
+
+
+
+
+
+
+theorem realizesLocalPattern_triple_iff
+    {r q a b e c : ℕ}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (he : 1 ≤ e)
+    (hc : 1 ≤ c) :
+    RealizesLocalPattern
+        { r := r, q := q }
+        (localTriplePattern r a b e c) ↔
+      LocalTripleResidue r q a b e c := by
+  constructor
+  · intro h
+    have hreal :
+        RealizesLocalTriple
+          { r := r, q := q } a b e c := by
+      rcases h with ⟨_, hsteps⟩
+      dsimp [localTriplePattern, RealizesLocalSteps] at hsteps
+      rcases hsteps with ⟨h1, h2, htail⟩
+      rcases htail with ⟨h3, h4, _⟩
+      exact ⟨h1, h2, h3, h4⟩
+    exact
+      (localTripleResidue_iff hr hq ha hb he hc).2 hreal
+  · intro hres
+    refine ⟨rfl, ?_⟩
+    dsimp [localTriplePattern, RealizesLocalSteps]
+    rcases
+        localTripleResidue_sufficient
+          hr hq ha hb he hc hres with
+      ⟨h1, h2, h3, h4⟩
+    exact ⟨h1, h2, h3, h4, trivial⟩
+
+
+
+
+
+
+/-
+  INTENTIONAL NON-THEOREM (finite extension principle):
+
+  If the inductive refinement
+    PositiveLocalPattern p →
+      ∃ q, Odd q ∧ RealizesLocalPattern {r:=p.headR, q:=q} p
+  is established, then no finite positive run-length prefix alone
+  determines the next run-length universally. This is NOT claimed
+  as a theorem in this block.
+
+  Collatz is not used. Infinite prescribed orbits are out of scope.
+-/
+
+
+
+
+
+
+
+
+
 theorem three_pow_mul_three
     (r t : ℕ) :
     3 ^ r * (3 * t) =
