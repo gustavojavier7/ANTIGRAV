@@ -3201,7 +3201,7 @@ theorem localBridgeQuotient_eq_nextCoord_q
     have hrearr :
         3 ^ r * q + 2 ^ a - 1 =
           3 ^ r * q - 1 + 2 ^ a :=
-      (Nat.sub_add_comm hpos_q).symm
+      (Nat.sub_add_comm hpos_q (2 ^ a)).symm
     exact hrearr.trans hbridge'
   unfold localBridgeQuotient
   rw [hlhs]
