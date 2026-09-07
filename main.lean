@@ -3198,9 +3198,14 @@ theorem localBridgeQuotient_eq_nextCoord_q
       3 ^ r * q + 2 ^ a - 1 =
         2 ^ (a + b) *
           (nextCoord { r := r, q := q }).q := by
-    -- add_sub_assoc: 1 ≤ n → n + k - 1 = n - 1 + k
-    rw [Nat.add_sub_assoc hpos_q]
-    exact hbridge'
+    -- Named params avoid rewrite-matching ambiguity:
+    -- n + m - k = n - k + m when k ≤ n.
+    have hrearr :
+        3 ^ r * q + 2 ^ a - 1 =
+          3 ^ r * q - 1 + 2 ^ a :=
+      Nat.add_sub_assoc
+        (n := 3 ^ r * q) (m := 2 ^ a) (k := 1) hpos_q
+    exact hrearr.trans hbridge'
   unfold localBridgeQuotient
   rw [hlhs]
   exact Nat.mul_div_cancel_left _ (by positivity)
