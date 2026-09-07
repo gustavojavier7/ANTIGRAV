@@ -3865,21 +3865,716 @@ theorem realizesLocalPattern_triple_iff
     exact ⟨h1, h2, h3, h4, trivial⟩
 
 
+/-!
+  Finite positive pattern extension by 2-adic refinement.
+
+  Status of this block: PROPOSED / NOT YET COMPILED.
+  Goal: isolate the transport identity
+    q₀' = q₀ + m · 2^{Dₙ}
+    qₙ' = qₙ + 2 · 3^{Pₙ} · m
+  and the one-step extension lemma, reusing LocalPairResidue
+  infrastructure (no monolithic multi-step congruence).
+
+  FAIL FIRST checks baked into the design:
+  * n = 0: D = 1, P = 0 ⇒ q' = q + 2m (exact).
+  * n = 1: reduces to localBridgeQuotient_lift.
+  * n = 2: recovers the triple refinement mechanism.
+  * Invert only the odd unit 3^P; never invert 2.
+  * Prefer exact Nat equalities over mere congruences for transport.
+  * No native_decide as a general proof.
+-/
 
 
+/--
+  Accumulated 2-adic precision of a step list.
+
+  Conceptual `Dₙ = 1 + Σᵢ (aᵢ + rᵢ₊₁)`.
+  The `currentR` argument is unused by the value but kept so the
+  recursive shape matches `localStepsRunWeight` for joint induction.
+-/
+def localStepsPrecision (_currentR : ℕ) : List LocalStep → ℕ
+  | [] => 1
+  | s :: tail =>
+      s.closing + s.nextR + localStepsPrecision s.nextR tail
+
+
+/--
+  Accumulated run-length weight of states traversed before the terminal.
+
+  Conceptual `Pₙ = Σᵢ rᵢ` (does not include the terminal run-length).
+-/
+def localStepsRunWeight (currentR : ℕ) : List LocalStep → ℕ
+  | [] => 0
+  | s :: tail =>
+      currentR + localStepsRunWeight s.nextR tail
+
+
+/-- Terminal run-length after consuming the step list from `currentR`. -/
+def localStepsTerminalR (currentR : ℕ) : List LocalStep → ℕ
+  | [] => currentR
+  | s :: tail => localStepsTerminalR s.nextR tail
+
+
+def localPatternPrecision (p : LocalPattern) : ℕ :=
+  localStepsPrecision p.headR p.steps
+
+
+def localPatternRunWeight (p : LocalPattern) : ℕ :=
+  localStepsRunWeight p.headR p.steps
+
+
+/--
+  Coordinate obtained by applying `nextCoord` once per step.
+  Under `RealizesLocalSteps`, the path is constrained by the steps;
+  the walk itself only advances by length.
+-/
+def walkLocalSteps (x : BlockCoord) : List LocalStep → BlockCoord
+  | [] => x
+  | _s :: tail => walkLocalSteps (nextCoord x) tail
+
+
+theorem localStepsPrecision_pos
+    (currentR : ℕ) (steps : List LocalStep) :
+    1 ≤ localStepsPrecision currentR steps := by
+  induction steps generalizing currentR with
+  | nil =>
+      simp [localStepsPrecision]
+  | cons s tail ih =>
+      simp [localStepsPrecision]
+      have := ih s.nextR
+      omega
+
+
+theorem localStepsPrecision_cons
+    (currentR : ℕ) (s : LocalStep) (tail : List LocalStep) :
+    localStepsPrecision currentR (s :: tail) =
+      s.closing + s.nextR +
+        localStepsPrecision s.nextR tail := by
+  rfl
+
+
+theorem localStepsRunWeight_cons
+    (currentR : ℕ) (s : LocalStep) (tail : List LocalStep) :
+    localStepsRunWeight currentR (s :: tail) =
+      currentR + localStepsRunWeight s.nextR tail := by
+  rfl
+
+
+theorem walkLocalSteps_cons
+    (x : BlockCoord) (s : LocalStep) (tail : List LocalStep) :
+    walkLocalSteps x (s :: tail) =
+      walkLocalSteps (nextCoord x) tail := by
+  rfl
+
+
+theorem walkLocalSteps_append
+    (x : BlockCoord) (steps : List LocalStep) (s : LocalStep) :
+    walkLocalSteps x (steps ++ [s]) =
+      nextCoord (walkLocalSteps x steps) := by
+  induction steps generalizing x with
+  | nil =>
+      simp [walkLocalSteps]
+  | cons t tail ih =>
+      simp [walkLocalSteps, ih]
+
+
+theorem realizesLocalSteps_append
+    (x : BlockCoord) (steps : List LocalStep) (s : LocalStep) :
+    RealizesLocalSteps x (steps ++ [s]) ↔
+      RealizesLocalSteps x steps ∧
+        coordClosingValuation (walkLocalSteps x steps) = s.closing ∧
+        (nextCoord (walkLocalSteps x steps)).r = s.nextR := by
+  induction steps generalizing x with
+  | nil =>
+      constructor
+      · intro h
+        dsimp [RealizesLocalSteps, walkLocalSteps] at h ⊢
+        rcases h with ⟨hclose, hnext, _⟩
+        exact ⟨trivial, hclose, hnext⟩
+      · intro h
+        dsimp [RealizesLocalSteps, walkLocalSteps] at h ⊢
+        rcases h with ⟨_, hclose, hnext⟩
+        exact ⟨hclose, hnext, trivial⟩
+  | cons t tail ih =>
+      constructor
+      · intro h
+        dsimp [RealizesLocalSteps, walkLocalSteps] at h
+        rcases h with ⟨hclose, hnext, htail⟩
+        have hrec := (ih (nextCoord x)).1 htail
+        rcases hrec with ⟨htail', htermClose, htermNext⟩
+        refine ⟨⟨hclose, hnext, htail'⟩, ?_, ?_⟩
+        · simpa [walkLocalSteps] using htermClose
+        · simpa [walkLocalSteps] using htermNext
+      · intro h
+        dsimp [RealizesLocalSteps, walkLocalSteps] at h ⊢
+        rcases h with ⟨hprefix, htermClose, htermNext⟩
+        rcases hprefix with ⟨hclose, hnext, htail⟩
+        refine ⟨hclose, hnext, ?_⟩
+        refine (ih (nextCoord x)).2 ⟨htail, ?_, ?_⟩
+        · simpa [walkLocalSteps] using htermClose
+        · simpa [walkLocalSteps] using htermNext
+
+
+/--
+  Under a realized positive prefix, the walk's `r` equals the
+  reconstructed terminal run-length, and the walk stays valid.
+-/
+theorem walkLocalSteps_of_realizes
+    {r q : ℕ} {steps : List LocalStep}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (hpos : ∀ s ∈ steps, PositiveLocalStep s)
+    (hreal : RealizesLocalSteps { r := r, q := q } steps) :
+    (walkLocalSteps { r := r, q := q } steps).r =
+        localStepsTerminalR r steps ∧
+      (walkLocalSteps { r := r, q := q } steps).Valid := by
+  induction steps generalizing r q with
+  | nil =>
+      refine ⟨rfl, ⟨hr, hq⟩⟩
+  | cons s tail ih =>
+      dsimp [RealizesLocalSteps] at hreal
+      rcases hreal with ⟨hclose, hnextR, htail⟩
+      have hs : PositiveLocalStep s := hpos s (by simp)
+      rcases hs with ⟨ha, hb⟩
+      have hres :
+          LocalPairResidue r q s.closing s.nextR :=
+        (localPairResidue_iff hr hq ha hb).2 ⟨hclose, hnextR⟩
+      have hnextEq :=
+        nextCoord_eq_of_localPairResidue hr hq ha hb hres
+      have hvalid1 : (nextCoord { r := r, q := q }).Valid :=
+        nextCoord_valid ⟨hr, hq⟩
+      have hpos' : ∀ t ∈ tail, PositiveLocalStep t := by
+        intro t ht
+        exact hpos t (by simp [ht])
+      -- Tail is realized at nextCoord; rewrite to canonical bridge form.
+      have htail' :
+          RealizesLocalSteps
+            { r := s.nextR
+              q := localBridgeQuotient r q s.closing s.nextR }
+            tail := by
+        rw [← hnextEq]
+        exact htail
+      have hwalk :=
+        ih (r := s.nextR)
+          (q := localBridgeQuotient r q s.closing s.nextR)
+          hb
+          (localBridgeQuotient_odd ha hb hres)
+          hpos' htail'
+      rcases hwalk with ⟨hrTerm, hValid⟩
+      refine ⟨?_, ?_⟩
+      · -- walk r and terminalR both reduce to the tail from s.nextR.
+        dsimp [walkLocalSteps, localStepsTerminalR]
+        rw [hnextEq]
+        exact hrTerm
+      · dsimp [walkLocalSteps]
+        rw [hnextEq]
+        exact hValid
+
+
+/--
+  Core transport identity for realized step lists.
+
+  Refining the initial odd coordinate by
+    `q ↦ q + m * 2^{localStepsPrecision r steps}`
+  preserves the entire realized prefix and shifts the terminal
+  quotient by exactly `2 * 3^{localStepsRunWeight r steps} * m`.
+
+  Base `[]`: D = 1, P = 0.
+  One-step: reduces to `localBridgeQuotient_lift`.
+-/
+theorem realizesLocalSteps_lift_transport
+    {r q m : ℕ} {steps : List LocalStep}
+    (hr : 1 ≤ r)
+    (hq : Odd q)
+    (hpos : ∀ s ∈ steps, PositiveLocalStep s)
+    (hreal : RealizesLocalSteps { r := r, q := q } steps) :
+    RealizesLocalSteps
+        { r := r, q := q + m * 2 ^ localStepsPrecision r steps }
+        steps ∧
+      (walkLocalSteps
+          { r := r
+            q := q + m * 2 ^ localStepsPrecision r steps }
+          steps).q =
+        (walkLocalSteps { r := r, q := q } steps).q +
+          2 * 3 ^ localStepsRunWeight r steps * m ∧
+      (walkLocalSteps
+          { r := r
+            q := q + m * 2 ^ localStepsPrecision r steps }
+          steps).r =
+        (walkLocalSteps { r := r, q := q } steps).r := by
+  induction steps generalizing r q m with
+  | nil =>
+      -- D = 1, P = 0: terminal = initial, shift by 2m.
+      refine ⟨trivial, ?_, rfl⟩
+      dsimp [walkLocalSteps, localStepsPrecision, localStepsRunWeight]
+      ring
+  | cons s tail ih =>
+      dsimp [RealizesLocalSteps] at hreal
+      rcases hreal with ⟨hclose, hnextR, htail⟩
+      have hs : PositiveLocalStep s := hpos s (by simp)
+      rcases hs with ⟨ha, hb⟩
+      have hres :
+          LocalPairResidue r q s.closing s.nextR :=
+        (localPairResidue_iff hr hq ha hb).2 ⟨hclose, hnextR⟩
+      -- Precision / weight decomposition.
+      set a := s.closing
+      set b := s.nextR
+      set Dtail := localStepsPrecision b tail
+      set Ptail := localStepsRunWeight b tail
+      have hD :
+          localStepsPrecision r (s :: tail) =
+            a + b + Dtail := by
+        simp [localStepsPrecision, a, b, Dtail]
+      have hP :
+          localStepsRunWeight r (s :: tail) =
+            r + Ptail := by
+        simp [localStepsRunWeight, Ptail]
+      have hDtail_pos : 1 ≤ Dtail :=
+        localStepsPrecision_pos b tail
+      -- Write the head refinement as a first-bridge modulus lift.
+      set mFirst : ℕ := m * 2 ^ (Dtail - 1)
+      have hpow :
+          m * 2 ^ (a + b + Dtail) =
+            mFirst * localPairModulus a b := by
+        dsimp [mFirst, localPairModulus]
+        have hDt : Dtail = (Dtail - 1) + 1 := by omega
+        calc
+          m * 2 ^ (a + b + Dtail) =
+              m * 2 ^ (a + b + ((Dtail - 1) + 1)) := by
+            rw [← hDt]
+          _ = m * 2 ^ ((a + b + 1) + (Dtail - 1)) := by
+            ring_nf
+          _ = m * (2 ^ (a + b + 1) * 2 ^ (Dtail - 1)) := by
+            rw [pow_add]
+          _ = m * 2 ^ (Dtail - 1) * 2 ^ (a + b + 1) := by ring
+      set qLift : ℕ :=
+        q + m * 2 ^ localStepsPrecision r (s :: tail)
+      have hqLift_eq :
+          qLift = q + mFirst * localPairModulus a b := by
+        dsimp [qLift]
+        rw [hD, hpow]
+      have hres' :
+          LocalPairResidue r qLift a b := by
+        rw [hqLift_eq]
+        exact localPairResidue_lift_modulus (m := mFirst) hres
+      have hqLift_odd : Odd qLift := by
+        have hDpos :
+            1 ≤ localStepsPrecision r (s :: tail) :=
+          localStepsPrecision_pos r (s :: tail)
+        rcases hq with ⟨t, ht⟩
+        refine
+          ⟨t + m * 2 ^ (localStepsPrecision r (s :: tail) - 1), ?_⟩
+        dsimp [qLift]
+        have hrepr :
+            2 ^ localStepsPrecision r (s :: tail) =
+              2 * 2 ^ (localStepsPrecision r (s :: tail) - 1) := by
+          have hEq :
+              localStepsPrecision r (s :: tail) =
+                (localStepsPrecision r (s :: tail) - 1) + 1 := by
+            omega
+          rw [hEq, pow_succ]
+          ring
+        rw [ht, hrepr]
+        ring
+      have hclose' :
+          coordClosingValuation { r := r, q := qLift } = a :=
+        (localPairResidue_sufficient hr hqLift_odd ha hb hres').1
+      have hnextR' :
+          (nextCoord { r := r, q := qLift }).r = b :=
+        (localPairResidue_sufficient hr hqLift_odd ha hb hres').2
+      -- Exact bridge quotient transport on the head step.
+      have hbridge :
+          localBridgeQuotient r qLift a b =
+            localBridgeQuotient r q a b +
+              2 * 3 ^ r * mFirst := by
+        rw [hqLift_eq]
+        exact localBridgeQuotient_lift ha hb hres
+      have hnext0 :=
+        nextCoord_eq_of_localPairResidue hr hq ha hb hres
+      have hnext0' :=
+        nextCoord_eq_of_localPairResidue hr hqLift_odd ha hb hres'
+      -- Tail starts at run-length b with odd quotient.
+      have hq1odd : Odd (localBridgeQuotient r q a b) :=
+        localBridgeQuotient_odd ha hb hres
+      have htail0 :
+          RealizesLocalSteps
+            { r := b, q := localBridgeQuotient r q a b } tail := by
+        simpa [hnext0] using htail
+      have hpos' : ∀ t ∈ tail, PositiveLocalStep t := by
+        intro t ht
+        exact hpos t (by simp [ht])
+      -- Tail refinement parameter: m_tail = 3^r * m.
+      set mTail : ℕ := 3 ^ r * m
+      have htail_q_shift :
+          localBridgeQuotient r qLift a b =
+            localBridgeQuotient r q a b +
+              mTail * 2 ^ Dtail := by
+        rw [hbridge]
+        dsimp [mFirst, mTail]
+        have hDt : Dtail = (Dtail - 1) + 1 := by omega
+        calc
+          localBridgeQuotient r q a b +
+                2 * 3 ^ r * (m * 2 ^ (Dtail - 1)) =
+              localBridgeQuotient r q a b +
+                3 ^ r * m * (2 * 2 ^ (Dtail - 1)) := by ring
+          _ =
+              localBridgeQuotient r q a b +
+                3 ^ r * m * 2 ^ Dtail := by
+            rw [← pow_succ, ← hDt]
+      -- Apply IH on the tail.
+      have hIH :=
+        ih (r := b)
+          (q := localBridgeQuotient r q a b)
+          (m := mTail)
+          hb hq1odd hpos' htail0
+      -- Package head realization for qLift.
+      have hhead' :
+          coordClosingValuation { r := r, q := qLift } = a ∧
+            (nextCoord { r := r, q := qLift }).r = b ∧
+            RealizesLocalSteps
+              (nextCoord { r := r, q := qLift }) tail := by
+        refine ⟨hclose', hnextR', ?_⟩
+        have : nextCoord { r := r, q := qLift } =
+            { r := b, q := localBridgeQuotient r qLift a b } :=
+          hnext0'
+        rw [this]
+        have hrealTail' := hIH.1
+        -- IH realizes at q1 + mTail * 2^Dtail = bridge(qLift).
+        simpa [htail_q_shift] using hrealTail'
+      refine ⟨?_, ?_, ?_⟩
+      · -- Full realizes for s :: tail at the lifted q.
+        change RealizesLocalSteps { r := r, q := qLift } (s :: tail)
+        dsimp [RealizesLocalSteps]
+        exact ⟨hhead'.1, hhead'.2.1, hhead'.2.2⟩
+      · -- Terminal q transport.
+        dsimp [walkLocalSteps]
+        change
+          (walkLocalSteps
+              { r := r, q := qLift } (s :: tail)).q =
+            (walkLocalSteps { r := r, q := q } (s :: tail)).q +
+              2 * 3 ^ localStepsRunWeight r (s :: tail) * m
+        dsimp [walkLocalSteps]
+        have hnext'eq :
+            nextCoord { r := r, q := qLift } =
+              { r := b
+                q :=
+                  localBridgeQuotient r q a b +
+                    mTail * 2 ^ Dtail } := by
+          rw [hnext0', htail_q_shift]
+        have hnextEq :
+            nextCoord { r := r, q := q } =
+              { r := b, q := localBridgeQuotient r q a b } :=
+          hnext0
+        -- Replace nextCoords; unfold qLift in the goal left walk.
+        change
+          (walkLocalSteps (nextCoord { r := r, q := qLift }) tail).q =
+            (walkLocalSteps (nextCoord { r := r, q := q }) tail).q +
+              2 * 3 ^ localStepsRunWeight r (s :: tail) * m
+        rw [hnext'eq, hnextEq, hP]
+        have hcalc := hIH.2.1
+        dsimp [mTail] at hcalc ⊢
+        have hpow3 : 3 ^ (r + Ptail) = 3 ^ r * 3 ^ Ptail := by
+          rw [pow_add]
+        calc
+          (walkLocalSteps
+                { r := b
+                  q :=
+                    localBridgeQuotient r q a b +
+                      (3 ^ r * m) * 2 ^ Dtail }
+                tail).q =
+              (walkLocalSteps
+                  { r := b
+                    q := localBridgeQuotient r q a b }
+                  tail).q +
+                2 * 3 ^ Ptail * (3 ^ r * m) := hcalc
+          _ =
+              (walkLocalSteps
+                  { r := b
+                    q := localBridgeQuotient r q a b }
+                  tail).q +
+                2 * 3 ^ (r + Ptail) * m := by
+            rw [hpow3]
+            ring
+      · -- Terminal r stable under lift.
+        change
+          (walkLocalSteps
+              { r := r, q := qLift } (s :: tail)).r =
+            (walkLocalSteps { r := r, q := q } (s :: tail)).r
+        dsimp [walkLocalSteps]
+        have hnext'eq :
+            nextCoord { r := r, q := qLift } =
+              { r := b
+                q :=
+                  localBridgeQuotient r q a b +
+                    mTail * 2 ^ Dtail } := by
+          rw [hnext0', htail_q_shift]
+        have hnextEq :
+            nextCoord { r := r, q := q } =
+              { r := b, q := localBridgeQuotient r q a b } :=
+          hnext0
+        rw [hnext'eq, hnextEq]
+        exact hIH.2.2
+
+
+/--
+  Strong finite extension lemma.
+
+  Given a realized positive pattern and a new positive step, there is a
+  2-adic refinement of the initial `q` that keeps the whole prefix and
+  realizes the extra step. The witness records the exact refinement:
+    q' = q + m * 2^{localPatternPrecision p}.
+-/
+theorem extend_positive_local_pattern
+    {p : LocalPattern}
+    {s : LocalStep}
+    (hp : PositiveLocalPattern p)
+    (hs : PositiveLocalStep s)
+    {q : ℕ}
+    (hq : Odd q)
+    (hreal :
+      RealizesLocalPattern
+        { r := p.headR, q := q } p) :
+    ∃ m q' : ℕ,
+      q' = q + m * 2 ^ localPatternPrecision p ∧
+      Odd q' ∧
+      RealizesLocalPattern
+        { r := p.headR, q := q' }
+        { headR := p.headR, steps := p.steps ++ [s] } := by
+  rcases hp with ⟨hr, hpos⟩
+  rcases hreal with ⟨hhead, hsteps⟩
+  -- Normalize head equality.
+  have hhead' : ({ r := p.headR, q := q } : BlockCoord).r = p.headR := hhead
+  set r := p.headR
+  set steps := p.steps
+  set D := localPatternPrecision p
+  set P := localPatternRunWeight p
+  have hD : D = localStepsPrecision r steps := by
+    dsimp [D, r, steps, localPatternPrecision]
+  have hP : P = localStepsRunWeight r steps := by
+    dsimp [P, r, steps, localPatternRunWeight]
+  -- Terminal coordinate of the realized prefix.
+  have hwalk :=
+    walkLocalSteps_of_realizes hr hq hpos (by
+      simpa [hhead] using hsteps)
+  rcases hwalk with ⟨hrTerm, hValidTerm⟩
+  set xn := walkLocalSteps { r := r, q := q } steps
+  have hrn : 1 ≤ xn.r := hValidTerm.1
+  have hqn : Odd xn.q := hValidTerm.2
+  rcases hs with ⟨ha, hb⟩
+  -- Target residue for the new step at the terminal run-length.
+  rcases
+      exists_odd_q_localPairResidue (r := xn.r) hrn ha hb with
+    ⟨Q, hQodd, hresQ⟩
+  let M₂ : ℕ := localPairModulus s.closing s.nextR
+  let Mhalf : ℕ := 2 ^ (s.closing + s.nextR)
+  have hMhalf : NeZero Mhalf := ⟨by
+    dsimp [Mhalf]
+    positivity⟩
+  -- Non-negative representative of Q - xn.q mod M₂ (same technique as triple).
+  let Qrep : ℕ := Q + xn.q * M₂
+  have hQmod : Nat.ModEq M₂ Qrep Q := by
+    dsimp [Qrep]
+    change (Q + xn.q * M₂) % M₂ = Q % M₂
+    rw [Nat.add_mul_mod_self_right]
+  have hQge : xn.q ≤ Qrep := by
+    dsimp [Qrep]
+    exact Nat.le_add_left _ _
+  let d : ℕ := Qrep - xn.q
+  have hd_even : Even d := by
+    rcases hQodd with ⟨u, hu⟩
+    rcases hqn with ⟨v, hv⟩
+    have hrepr :
+        d = Q + xn.q * 2 ^ (s.closing + s.nextR + 1) - xn.q := by
+      dsimp [d, Qrep, M₂, localPairModulus]
+      rfl
+    refine ⟨u + (2 * v + 1) * 2 ^ (s.closing + s.nextR) - v, ?_⟩
+    rw [hrepr, hu, hv, pow_succ]
+    omega
+  let d' : ℕ := d / 2
+  have hdd' : d = 2 * d' := by
+    dsimp [d']
+    exact (Even.two_mul_div_two hd_even).symm
+  -- Solve 3^P * m ≡ d' (mod 2^{closing+nextR}); invert only the odd unit.
+  have hu3 :
+      IsUnit (((3 ^ P : ℕ) : ZMod Mhalf)) := by
+    exact
+      (ZMod.isUnit_iff_coprime (3 ^ P) Mhalf).2
+        (by
+          simpa [Mhalf] using
+            three_pow_coprime_pow_two P (s.closing + s.nextR))
+  rcases hu3 with ⟨u3, hu3val⟩
+  let x : ZMod Mhalf :=
+    ((u3⁻¹ : (ZMod Mhalf)ˣ) : ZMod Mhalf) *
+      ((d' : ℕ) : ZMod Mhalf)
+  let m : ℕ := @ZMod.val Mhalf x
+  have hmcast : ((m : ℕ) : ZMod Mhalf) = x := by
+    dsimp [m]
+    exact @ZMod.natCast_zmod_val Mhalf hMhalf x
+  have hmx :
+      ((3 ^ P : ℕ) : ZMod Mhalf) * x =
+        ((d' : ℕ) : ZMod Mhalf) := by
+    rw [← hu3val]
+    dsimp [x]
+    simp [← mul_assoc]
+  have hmod_half :
+      Nat.ModEq Mhalf (3 ^ P * m) d' := by
+    refine
+      (ZMod.natCast_eq_natCast_iff
+        (3 ^ P * m) d' Mhalf).mp ?_
+    rw [Nat.cast_mul, hmcast]
+    exact hmx
+  have hmod_full :
+      Nat.ModEq M₂ (2 * 3 ^ P * m) d := by
+    have hMeq : M₂ = 2 * Mhalf := by
+      dsimp [M₂, Mhalf, localPairModulus]
+      rw [pow_succ]
+      ring
+    have hm2 :
+        Nat.ModEq (2 * Mhalf)
+          (2 * (3 ^ P * m)) (2 * d') :=
+      (hmod_half.mul_left 2)
+    rw [hMeq, hdd']
+    simpa [mul_assoc] using hm2
+  -- Refined initial coordinate.
+  let q' : ℕ := q + m * 2 ^ D
+  have htransport :=
+    realizesLocalSteps_lift_transport
+      (r := r) (q := q) (m := m) (steps := steps)
+      hr hq hpos (by simpa [hhead] using hsteps)
+  rcases htransport with ⟨hsteps', htermQ, htermR⟩
+  have hq'odd : Odd q' := by
+    have hDpos : 1 ≤ D := by
+      dsimp [D, localPatternPrecision]
+      exact localStepsPrecision_pos p.headR p.steps
+    rcases hq with ⟨t, ht⟩
+    refine ⟨t + m * 2 ^ (D - 1), ?_⟩
+    dsimp [q']
+    have hrepr : 2 ^ D = 2 * 2 ^ (D - 1) := by
+      have hEq : D = (D - 1) + 1 := by omega
+      rw [hEq, pow_succ]
+      ring
+    rw [ht, hrepr]
+    ring
+  -- Terminal quotient after lift.
+  set xn' := walkLocalSteps { r := r, q := q' } steps
+  have hxn'q :
+      xn'.q = xn.q + 2 * 3 ^ P * m := by
+    -- from transport + P/D unfolding
+    dsimp [xn', xn, q', D, P] at htermQ ⊢
+    -- htermQ uses localStepsRunWeight r steps = P
+    simpa [hD, hP, localPatternPrecision, localPatternRunWeight,
+      r, steps] using htermQ
+  have hxn'r : xn'.r = xn.r := by
+    dsimp [xn', xn] at htermR ⊢
+    simpa using htermR
+  -- New step residue at the lifted terminal.
+  have hbridge_mod :
+      Nat.ModEq M₂ xn'.q Q := by
+    rw [hxn'q]
+    have hadd :
+        Nat.ModEq M₂
+          (xn.q + 2 * 3 ^ P * m)
+          (xn.q + d) :=
+      hmod_full.add_left xn.q
+    have hsum : xn.q + d = Qrep := by
+      dsimp [d]
+      exact Nat.add_sub_cancel' hQge
+    have htoQ : Nat.ModEq M₂ (xn.q + d) Qrep := by
+      rw [hsum]
+    exact hadd.trans (htoQ.trans hQmod)
+  have hresNew :
+      LocalPairResidue xn'.r xn'.q s.closing s.nextR := by
+    have hresQ' :
+        LocalPairResidue xn.r Q s.closing s.nextR := by
+      simpa [xn] using hresQ
+    have hresAt :
+        LocalPairResidue xn'.r Q s.closing s.nextR := by
+      simpa [hxn'r] using hresQ'
+    exact
+      localPairResidue_of_modEq_q ha hb hresAt hbridge_mod.symm
+  have hrn' : 1 ≤ xn'.r := by
+    simpa [hxn'r] using hrn
+  have hqn' : Odd xn'.q := by
+    -- odd + even stays odd: 2*3^P*m is even.
+    rcases hqn with ⟨t, ht⟩
+    refine ⟨t + 3 ^ P * m, ?_⟩
+    rw [hxn'q, ht]
+    ring
+  have hnewClose :
+      coordClosingValuation xn' = s.closing :=
+    (localPairResidue_sufficient hrn' hqn' ha hb hresNew).1
+  have hnewNext :
+      (nextCoord xn').r = s.nextR :=
+    (localPairResidue_sufficient hrn' hqn' ha hb hresNew).2
+  have hsteps'q :
+      RealizesLocalSteps { r := r, q := q' } steps := by
+    -- transport uses 2^{localStepsPrecision}; q' uses 2^D with D equal.
+    have hq'def :
+        q' = q + m * 2 ^ localStepsPrecision r steps := by
+      dsimp [q']
+      exact congrArg (fun k => q + m * 2 ^ k) hD
+    rw [hq'def]
+    exact hsteps'
+  have hstepsAll :
+      RealizesLocalSteps { r := r, q := q' } (steps ++ [s]) := by
+    refine (realizesLocalSteps_append
+        { r := r, q := q' } steps s).2 ?_
+    refine ⟨hsteps'q, ?_, ?_⟩
+    · -- xn' is that walk by definition of the `set`.
+      simpa [xn'] using hnewClose
+    · simpa [xn'] using hnewNext
+  refine ⟨m, q', rfl, hq'odd, ?_⟩
+  -- RealizesLocalPattern at headR with extended steps.
+  change
+    RealizesLocalPattern
+      { r := p.headR, q := q' }
+      { headR := p.headR, steps := p.steps ++ [s] }
+  refine ⟨rfl, ?_⟩
+  simpa [r, steps] using hstepsAll
 
 
 /-
-  INTENTIONAL NON-THEOREM (finite extension principle):
+  SKETCH ONLY — do not treat as compiled.
 
-  If the inductive refinement
-    PositiveLocalPattern p →
-      ∃ q, Odd q ∧ RealizesLocalPattern {r:=p.headR, q:=q} p
-  is established, then no finite positive run-length prefix alone
-  determines the next run-length universally. This is NOT claimed
-  as a theorem in this block.
+  theorem every_positive_local_pattern_realizable
+      (p : LocalPattern)
+      (hp : PositiveLocalPattern p) :
+      ∃ q : ℕ,
+        Odd q ∧
+        RealizesLocalPattern { r := p.headR, q := q } p := by
+    -- Induction on p.steps, building the pattern one LocalStep at a time.
+    --
+    -- Base (steps = []):
+    --   take q = 1 (Odd). RealizesLocalSteps _ [] = True.
+    --   headR positivity from hp.
+    --
+    -- Inductive step:
+    --   write steps = prefix ++ [s] (or fold from the empty prefix).
+    --   IH: ∃ q, Odd q ∧ RealizesLocalPattern head prefix.
+    --   hs: PositiveLocalStep s from hp.
+    --   apply extend_positive_local_pattern to obtain q'.
+    --
+    -- Equivalent formulation: define the partial patterns
+    --   pₖ = { headR := p.headR, steps := p.steps.take k }
+    -- and induct on k = 0..length, extending by the next step each time.
+    --
+    -- Uses exclusively: empty realization + extend_positive_local_pattern.
+    sorry
 
-  Collatz is not used. Infinite prescribed orbits are out of scope.
+  STRUCTURAL COROLLARY (conceptual; not a theorem here):
+
+  Once `every_positive_local_pattern_realizable` is available, any finite
+  positive run-length prefix can be extended by at least two distinct
+  positive next run-lengths (choose two different positive LocalSteps
+  with the same closing or different closings, both positive). The strong
+  extension lemma supplies, for each choice, a 2-adic refinement of q that
+  preserves the prefix. Therefore no finite positive run-length prefix
+  alone determines the next run-length universally.
+
+  Explicitly NOT claimed:
+  * realizability of an arbitrary infinite sequence;
+  * a single natural compatible with infinitely many constraints;
+  * Collatz convergence or the Collatz conjecture.
 -/
 
 
