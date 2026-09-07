@@ -3183,28 +3183,26 @@ theorem localBridgeQuotient_eq_nextCoord_q
     hpair.1
   have hnr : (nextCoord { r := r, q := q }).r = b :=
     hpair.2
-  have :
+  have hbridge' :
       3 ^ r * q - 1 + 2 ^ a =
         2 ^ (a + b) *
           (nextCoord { r := r, q := q }).q := by
     rw [hclose, hnr] at hbridge
     exact hbridge
-  -- Nat subtraction: need 1 ≤ 3^r * q to rearrange
-  -- (3^r * q - 1) + 2^a = 3^r * q + 2^a - 1.
+  -- Avoid omega on a large context: rearrange Nat subtraction explicitly.
   have hpos_q : 1 ≤ 3 ^ r * q := by
-    rcases hq with ⟨k, hk⟩
-    have : 0 < 3 ^ r := by positivity
-    omega
+    have h3 : 1 ≤ 3 ^ r :=
+      Nat.one_le_pow r 3 (by norm_num)
+    exact h3.trans (Nat.le_mul_of_pos_right (3 ^ r) (Odd.pos hq))
   have hlhs :
       3 ^ r * q + 2 ^ a - 1 =
         2 ^ (a + b) *
           (nextCoord { r := r, q := q }).q := by
-    calc
-      3 ^ r * q + 2 ^ a - 1 =
-          3 ^ r * q - 1 + 2 ^ a := by omega
-      _ =
-          2 ^ (a + b) *
-            (nextCoord { r := r, q := q }).q := this
+    have hrearr :
+        3 ^ r * q + 2 ^ a - 1 =
+          3 ^ r * q - 1 + 2 ^ a :=
+      (Nat.sub_add_comm hpos_q).symm
+    exact hrearr.trans hbridge'
   unfold localBridgeQuotient
   rw [hlhs]
   exact Nat.mul_div_cancel_left _ (by positivity)
