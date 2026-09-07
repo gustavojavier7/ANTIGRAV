@@ -3390,14 +3390,11 @@ theorem nextCoord_eq_of_localPairResidue
     localPairResidue_sufficient hr hq ha hb hres
   have hq1 :=
     localBridgeQuotient_eq_nextCoord_q hr hq ha hb hres
-  -- Force field view (eta hides projections under bare `nextCoord`).
-  change
-    ({
-      r := (nextCoord { r := r, q := q }).r
-      q := (nextCoord { r := r, q := q }).q
-    } : BlockCoord) =
-      ({ r := b, q := localBridgeQuotient r q a b } : BlockCoord)
-  rw [hpair.2, hq1.symm]
+  -- Fieldwise equality via ext_iff (avoids eta-collapsed rewrites).
+  refine (BlockCoord.ext_iff
+      (nextCoord { r := r, q := q })
+      ({ r := b, q := localBridgeQuotient r q a b } : BlockCoord)).2 ?_
+  exact ⟨hpair.2, hq1.symm⟩
 
 
 
