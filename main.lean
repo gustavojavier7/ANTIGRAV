@@ -3540,25 +3540,34 @@ theorem exists_odd_q_localTripleResidue
     rw [Nat.add_mul_mod_self_right]
   have hQge : q₁₀ ≤ Q := by
     dsimp [Q]
-    exact Nat.le_add_left _ _
+    -- Need q₁₀ ≤ q₁ + q₁₀ * M₂.
+    -- le_add_left n m means n ≤ m + n, so use n = q₁₀ * M₂.
+    have hMpos : 0 < M₂ := by
+      dsimp [M₂, localPairModulus]
+      positivity
+    have hmul : q₁₀ ≤ q₁₀ * M₂ :=
+      Nat.le_mul_of_pos_right q₁₀ hMpos
+    exact hmul.trans (Nat.le_add_left (q₁₀ * M₂) q₁)
   let d : ℕ := Q - q₁₀
+  -- Q = q₁ + q₁₀ * M₂ with M₂ even and q₁, q₁₀ odd ⇒ Q odd ⇒ d even.
   have hd_even : Even d := by
-    rcases hq₁ with ⟨u, hu⟩
-    rcases hq₁₀odd with ⟨v, hv⟩
-    have hrepr :
-        d = q₁ + q₁₀ * 2 ^ (e + c + 1) - q₁₀ := by
-      dsimp [d, Q, M₂, localPairModulus]
-      rfl
-    -- d = (2u+1) + (2v+1)*2^{e+c+1} - (2v+1)
-    --   = 2u + (2v+1)*2^{e+c+1} - 2v
-    --   = 2*(u - v + (2v+1)*2^{e+c})
-    refine ⟨u + (2 * v + 1) * 2 ^ (e + c) - v, ?_⟩
-    rw [hrepr, hu, hv, pow_succ]
-    omega
+    dsimp [d]
+    have hMeven : Even M₂ := by
+      dsimp [M₂, localPairModulus]
+      -- 2^(e+c+1) = 2^n * 2 = 2 * 2^n
+      rw [pow_succ, Nat.mul_comm]
+      exact even_two_mul (2 ^ (e + c) : ℕ)
+    have hQodd : Odd Q := by
+      dsimp [Q]
+      exact Odd.add_even hq₁ (Even.mul_left hMeven q₁₀)
+    refine (Nat.even_sub hQge).2 ?_
+    exact iff_of_false
+      (Nat.not_even_iff_odd.2 hQodd)
+      (Nat.not_even_iff_odd.2 hq₁₀odd)
   let d' : ℕ := d / 2
   have hdd' : d = 2 * d' := by
     dsimp [d']
-    exact (Even.two_mul_div_two hd_even).symm
+    exact (Nat.two_mul_div_two_of_even hd_even).symm
   -- Solve 3^r * m ≡ d' (mod 2^{e+c}).
   have hu3 :
       IsUnit (((3 ^ r : ℕ) : ZMod Mhalf)) := by
@@ -3598,7 +3607,8 @@ theorem exists_odd_q_localTripleResidue
     have hm2 :
         Nat.ModEq (2 * Mhalf)
           (2 * (3 ^ r * m)) (2 * d') :=
-      (hmod_half.mul_left 2)
+      -- mul_left' scales the modulus: a ≡ b [MOD n] → c*a ≡ c*b [MOD c*n]
+      (hmod_half.mul_left' 2)
     rw [hMeq, hdd']
     simpa [mul_assoc] using hm2
   let q : ℕ := q₀ + m * localPairModulus a b
