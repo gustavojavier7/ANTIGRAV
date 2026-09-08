@@ -3417,9 +3417,11 @@ theorem localTripleResidue_sufficient
     localPairResidue_sufficient hr hq ha hb h1
   have hq1odd :=
     localBridgeQuotient_odd ha hb h1
+  -- Order: hr hq ha hb hres  (not Odd where 1 ≤ b is expected).
   have hpair2 :=
     localPairResidue_sufficient
-      (r := b) hq1odd he hc h2
+      (r := b) (q := localBridgeQuotient r q a b)
+      hb hq1odd he hc h2
   have hxnext :=
     nextCoord_eq_of_localPairResidue hr hq ha hb h1
   refine ⟨hpair.1, hpair.2, ?_, ?_⟩
