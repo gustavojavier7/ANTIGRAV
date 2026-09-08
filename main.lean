@@ -4137,11 +4137,13 @@ theorem realizesLocalSteps_lift_transport
       have hD :
           localStepsPrecision r (s :: tail) =
             a + b + Dtail := by
-        simp [localStepsPrecision, a, b, Dtail]
+        -- Unfold cons and discharge set-aliases a,b,Dtail.
+        simp [localStepsPrecision_cons, a, b, Dtail]
       have hP :
           localStepsRunWeight r (s :: tail) =
             r + Ptail := by
-        simp [localStepsRunWeight, Ptail]
+        -- Need b in the simp set: Ptail = weight at b, b = s.nextR.
+        simp [localStepsRunWeight_cons, Ptail, b]
       have hDtail_pos : 1 ≤ Dtail :=
         localStepsPrecision_pos b tail
       -- Write the head refinement as a first-bridge modulus lift.
