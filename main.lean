@@ -15580,3 +15580,551 @@ charts, replicated moves need not be legal and legality need not be monotone in
 the layer index.  No concrete equivalence `ValidCoord ≃ GridPoint` is selected
 in this section.
 -/
+
+
+/-!
+# AFFINE COLLATZ / BBP-LIKE ACCESS RESEARCH
+
+FORMAL GOAL:
+Represent finite Collatz transformations by composable affine
+descriptors.
+
+KNOWN DIRECTION:
+descriptor + initial state -> distant state
+
+OPEN DIRECTION:
+initial state + position n
+-> descriptor without orbit traversal
+-> distant state
+
+The phrase "BBP-like" is motivational only.
+No random-access theorem, complexity claim, or Collatz
+convergence result is asserted here.
+
+FAIL FIRST:
+An algebraically meaningful affine transformation is not
+automatically a valid Collatz trajectory. Required valuations
+and residue conditions must be certified separately.
+-/
+
+
+/--
+  Affine descriptor `D = (R, S, C)`.
+
+  Intended exact relation (see `AffineRealizes`):
+
+      3^R * x + C = 2^S * y
+
+  Semantics are multiplicative equalities, not truncated `Nat`
+  division.  Algebraic integrity does not by itself certify a
+  Collatz valuation or residue condition.
+-/
+structure AffineDescriptor where
+  pow3       : ℕ
+  pow2       : ℕ
+  correction : ℕ
+  deriving DecidableEq, Repr
+
+
+/--
+  Exact realization of an affine descriptor:
+
+      3 ^ d.pow3 * x + d.correction = 2 ^ d.pow2 * y
+-/
+def AffineRealizes (d : AffineDescriptor) (x y : ℕ) : Prop :=
+  3 ^ d.pow3 * x + d.correction = 2 ^ d.pow2 * y
+
+
+/--
+  Identity descriptor: `pow3 = 0`, `pow2 = 0`, `correction = 0`.
+  Realizes `x = y`.
+-/
+def affineId : AffineDescriptor where
+  pow3 := 0
+  pow2 := 0
+  correction := 0
+
+
+theorem affineRealizes_id (x : ℕ) :
+    AffineRealizes affineId x x := by
+  unfold AffineRealizes affineId
+  simp
+
+
+/--
+  Algebraic image of one accelerated odd Collatz step with
+  prescribed 2-valuation `a`:
+
+      3 * x + 1 = 2 ^ a * y
+
+  FAIL FIRST:
+  For a *real* accelerated Collatz step one also needs
+
+      a = v2 (3 * x + 1)
+
+  (and `x` odd, etc.).  `oddStepAffine` only packages the
+  algebraic relation; it does not certify the valuation.
+-/
+def oddStepAffine (a : ℕ) : AffineDescriptor where
+  pow3 := 1
+  pow2 := a
+  correction := 1
+
+
+theorem affineRealizes_oddStepAffine
+    (a x y : ℕ) :
+    AffineRealizes (oddStepAffine a) x y ↔
+      3 * x + 1 = 2 ^ a * y := by
+  unfold AffineRealizes oddStepAffine
+  simp
+
+
+/--
+  Composition of affine descriptors with orientation
+
+      x --d1--> y --d2--> z
+
+  Explicit formula:
+
+      pow3       = d1.pow3 + d2.pow3
+      pow2       = d1.pow2 + d2.pow2
+      correction = 3 ^ d2.pow3 * d1.correction
+                 + 2 ^ d1.pow2 * d2.correction
+-/
+def affineCompose
+    (d1 d2 : AffineDescriptor) : AffineDescriptor where
+  pow3 := d1.pow3 + d2.pow3
+  pow2 := d1.pow2 + d2.pow2
+  correction :=
+    3 ^ d2.pow3 * d1.correction +
+      2 ^ d1.pow2 * d2.correction
+
+
+/--
+  Central composition theorem:
+
+  algebraic realization is preserved under `affineCompose`.
+-/
+theorem affineCompose_realizes
+    {d1 d2 : AffineDescriptor} {x y z : ℕ}
+    (h1 : AffineRealizes d1 x y)
+    (h2 : AffineRealizes d2 y z) :
+    AffineRealizes (affineCompose d1 d2) x z := by
+  unfold AffineRealizes affineCompose at *
+  calc
+    3 ^ (d1.pow3 + d2.pow3) * x +
+          (3 ^ d2.pow3 * d1.correction +
+            2 ^ d1.pow2 * d2.correction)
+        =
+          3 ^ d2.pow3 * 3 ^ d1.pow3 * x +
+            3 ^ d2.pow3 * d1.correction +
+            2 ^ d1.pow2 * d2.correction := by
+          rw [pow_add]
+          ring
+    _ = 3 ^ d2.pow3 * (3 ^ d1.pow3 * x + d1.correction) +
+          2 ^ d1.pow2 * d2.correction := by
+        ring
+    _ = 3 ^ d2.pow3 * (2 ^ d1.pow2 * y) +
+          2 ^ d1.pow2 * d2.correction := by
+        rw [h1]
+    _ = 2 ^ d1.pow2 * (3 ^ d2.pow3 * y) +
+          2 ^ d1.pow2 * d2.correction := by
+        ring
+    _ = 2 ^ d1.pow2 * (3 ^ d2.pow3 * y + d2.correction) := by
+        ring
+    _ = 2 ^ d1.pow2 * (2 ^ d2.pow2 * z) := by
+        rw [h2]
+    _ = 2 ^ (d1.pow2 + d2.pow2) * z := by
+        rw [pow_add]
+        ring
+
+
+theorem affineCompose_id_right (d : AffineDescriptor) :
+    affineCompose d affineId = d := by
+  cases d
+  simp [affineCompose, affineId, pow_zero]
+
+
+theorem affineCompose_id_left (d : AffineDescriptor) :
+    affineCompose affineId d = d := by
+  cases d
+  simp [affineCompose, affineId, pow_zero]
+
+
+/--
+  Two successive odd-step descriptors.
+
+  Algebraically:
+
+      x --a--> y --b--> z
+
+  implies
+
+      9 * x + 3 + 2 ^ a = 2 ^ (a + b) * z
+
+  Equivalently (when divisibility is certified separately):
+
+      z = (9 * x + 3 + 2 ^ a) / 2 ^ (a + b)
+
+  Multiplicative inverse form (no hiding Nat subtraction):
+
+      9 * x + (3 + 2 ^ a) = 2 ^ (a + b) * z
+-/
+theorem two_odd_steps_affineCompose_eq
+    (a b : ℕ) :
+    affineCompose (oddStepAffine a) (oddStepAffine b) =
+      { pow3 := 2
+        pow2 := a + b
+        correction := 3 + 2 ^ a } := by
+  unfold affineCompose oddStepAffine
+  simp
+
+
+theorem two_odd_steps_realizes
+    {a b x y z : ℕ}
+    (h1 : AffineRealizes (oddStepAffine a) x y)
+    (h2 : AffineRealizes (oddStepAffine b) y z) :
+    9 * x + 3 + 2 ^ a = 2 ^ (a + b) * z := by
+  have h := affineCompose_realizes h1 h2
+  rw [two_odd_steps_affineCompose_eq] at h
+  unfold AffineRealizes at h
+  -- h : 3^2 * x + (3 + 2^a) = 2^(a+b) * z
+  simpa [pow_two] using h
+
+
+/--
+  Multiplicative rearrangement of the two-odd-step identity.
+  Same content as `two_odd_steps_realizes`; kept explicit so that
+  Nat subtraction cannot hide preconditions.
+-/
+theorem two_odd_steps_multiplicative_form
+    {a b x y z : ℕ}
+    (h1 : AffineRealizes (oddStepAffine a) x y)
+    (h2 : AffineRealizes (oddStepAffine b) y z) :
+    9 * x + (3 + 2 ^ a) = 2 ^ (a + b) * z := by
+  have h := two_odd_steps_realizes h1 h2
+  omega
+
+
+/--
+  Small test: 7 -> 11 -> 17 with a = 1, b = 1.
+
+  Composite check does not need the intermediate 11:
+
+      9 * 7 + 3 + 2 = 4 * 17 = 68
+-/
+example :
+    AffineRealizes (oddStepAffine 1) 7 11 := by
+  native_decide
+
+
+example :
+    AffineRealizes (oddStepAffine 1) 11 17 := by
+  native_decide
+
+
+example :
+    AffineRealizes
+      (affineCompose (oddStepAffine 1) (oddStepAffine 1))
+      7 17 := by
+  native_decide
+
+
+example : 9 * 7 + 3 + 2 ^ 1 = 2 ^ (1 + 1) * 17 := by
+  native_decide
+
+
+/--
+  Affine descriptor packaged from a certified local pair
+  `(r, a, b)`.
+
+  From `localPairResidue_exact_bridge`:
+
+      3^r * q + 2^a = 1 + 2^(a+b) * qNext
+
+  hence
+
+      3^r * q + (2^a - 1) = 2^(a+b) * qNext
+
+  so the descriptor is `(R, S, C) = (r, a + b, 2^a - 1)`.
+
+  FAIL FIRST:
+  `2 ^ a - 1` is a Nat difference.  Realization theorems below
+  require `1 ≤ a` (as in the existing bridge corpus), so the
+  difference is well-formed for certified pairs.
+-/
+def blockAffineDescriptor (r a b : ℕ) : AffineDescriptor where
+  pow3 := r
+  pow2 := a + b
+  correction := 2 ^ a - 1
+
+
+/--
+  Bridge: a certified `LocalPairResidue` realizes the block
+  affine descriptor on `(q, localBridgeQuotient)`.
+
+  Reuses `localPairResidue_exact_bridge`; does not reprove the
+  residue decomposition from scratch.
+-/
+theorem localPairResidue_affineRealizes
+    {r q a b : ℕ}
+    (ha : 1 ≤ a)
+    (hb : 1 ≤ b)
+    (hres : LocalPairResidue r q a b) :
+    AffineRealizes
+      (blockAffineDescriptor r a b)
+      q
+      (localBridgeQuotient r q a b) := by
+  unfold AffineRealizes blockAffineDescriptor
+  have hexact :=
+    localPairResidue_exact_bridge ha hb hres
+  have hpow : 1 ≤ 2 ^ a :=
+    Nat.one_le_pow a 2 (by norm_num)
+  have hpos : 1 ≤ 3 ^ r * q + 2 ^ a := by
+    have : 0 < 2 ^ a := by positivity
+    omega
+  have hsub :
+      3 ^ r * q + 2 ^ a - 1 =
+        2 ^ (a + b) * localBridgeQuotient r q a b := by
+    -- hexact: 3^r*q + 2^a = 1 + 2^(a+b)*qNext
+    omega
+  -- Nat.add_sub_assoc: n + m - k = n + (m - k) when k ≤ m.
+  -- Goal is n + (m - k) = ...; rewrite to n + m - k.
+  rw [← Nat.add_sub_assoc hpow]
+  exact hsub
+
+
+/-
+  PROPOSED / NOT YET COMPILED
+
+  Fallback note for `localPairResidue_affineRealizes` if the
+  first compile needs a local tactic adjustment.  The intended
+  content is only the rearrangement
+
+      3^r * q + 2^a = 1 + 2^(a+b) * localBridgeQuotient
+      ⇒ 3^r * q + (2^a - 1) = 2^(a+b) * localBridgeQuotient
+
+  under the existing hypotheses `1 ≤ a` and `1 ≤ b` from
+  `localPairResidue_exact_bridge`.  Keep any fallback commented
+  until it compiles; never activate a placeholder proof.
+-/
+
+
+/-!
+  ## Example: 319 → 911 → 577 (Collatz 27 excursion fragment)
+
+  Coordinates:
+
+      319 + 1 = 2^6 * 5
+      first block:  r = 6, q = 5, a = 2, nextR = 4
+
+      911 + 1 = 2^4 * 57
+      second block: r = 4, q = 57, a = 3, nextR = 1
+
+      577 + 1 = 2^1 * 289
+
+  Descriptors:
+
+      D1  = (6, 6, 3)     -- blockAffineDescriptor 6 2 4
+      D2  = (4, 4, 7)     -- blockAffineDescriptor 4 3 1
+      D12 = (10, 10, 691) -- 3^4 * 3 + 2^6 * 7 = 691
+
+  Composite jump on quotients:
+
+      3^10 * 5 + 691 = 2^10 * 289
+
+  Intermediate q = 57 is not required to check the composite.
+  This does NOT claim the descriptor was obtained without knowing
+  the blocks.
+-/
+
+
+def collatz27_D1 : AffineDescriptor :=
+  blockAffineDescriptor 6 2 4
+
+
+def collatz27_D2 : AffineDescriptor :=
+  blockAffineDescriptor 4 3 1
+
+
+def collatz27_D12 : AffineDescriptor :=
+  affineCompose collatz27_D1 collatz27_D2
+
+
+example : collatz27_D1 =
+    { pow3 := 6, pow2 := 6, correction := 3 } := by
+  native_decide
+
+
+example : collatz27_D2 =
+    { pow3 := 4, pow2 := 4, correction := 7 } := by
+  native_decide
+
+
+example : collatz27_D12 =
+    { pow3 := 10, pow2 := 10, correction := 691 } := by
+  native_decide
+
+
+example : 3 ^ 4 * 3 + 2 ^ 6 * 7 = 691 := by
+  native_decide
+
+
+example :
+    AffineRealizes collatz27_D12 5 289 := by
+  native_decide
+
+
+example : 3 ^ 10 * 5 + 691 = 2 ^ 10 * 289 := by
+  native_decide
+
+
+example :
+    decodeBlockCoord { r := 6, q := 5 } = 319 := by
+  native_decide
+
+
+example :
+    decodeBlockCoord { r := 1, q := 289 } = 577 := by
+  native_decide
+
+
+example :
+    decodeBlockCoord { r := 4, q := 57 } = 911 := by
+  native_decide
+
+
+/-!
+  ## Descriptor of n blocks
+
+  A finite certified block sequence compresses to one triple
+  `(R, S, C)` with
+
+      3^R * x + C = 2^S * y
+
+  Once local descriptors are known, `affineCompose` aggregates
+  them without retaining intermediate states.
+
+  No random-access / BBP-style selection of the n-th aggregate
+  descriptor is formalized here.
+-/
+
+
+/--
+  Left-to-right fold of affine descriptors:
+
+      [d1, d2, ..., dk]  maps to  ((id compose d1) compose d2) compose ... compose dk
+
+  matching the orientation `x --d1--> --d2--> ... --> z`.
+-/
+def affineComposeList (ds : List AffineDescriptor) : AffineDescriptor :=
+  ds.foldl affineCompose affineId
+
+
+theorem affineComposeList_nil :
+    affineComposeList [] = affineId := by
+  rfl
+
+
+theorem affineComposeList_singleton (d : AffineDescriptor) :
+    affineComposeList [d] = d := by
+  simp [affineComposeList, affineCompose_id_left]
+
+
+theorem affineComposeList_pair
+    (d1 d2 : AffineDescriptor) :
+    affineComposeList [d1, d2] = affineCompose d1 d2 := by
+  simp [affineComposeList, affineCompose_id_left]
+
+
+/-
+  PROPOSED / NOT YET COMPILED
+
+  Inductive multi-step realization along an explicit chain of
+  intermediate states.  Safe algebraically once stated with an
+  explicit witness list; deferred to first compile pass.
+
+  theorem affineComposeList_realizes
+      (ds : List AffineDescriptor) (xs : List ℕ)
+      (hlen : xs.length = ds.length + 1)
+      (hstep : ∀ i : ℕ, (hi : i < ds.length) →
+        AffineRealizes ds[i] xs[i] xs[i + 1]) :
+      AffineRealizes (affineComposeList ds)
+        xs[0] xs[ds.length]
+
+  Intended proof: induction on `ds`, reusing
+  `affineCompose_realizes` and `affineComposeList_pair`.
+  Do not activate until compiled.
+-/
+
+
+example :
+    affineComposeList [collatz27_D1, collatz27_D2] =
+      collatz27_D12 := by
+  native_decide
+
+
+/-!
+  ## Connection with `LocalPattern`
+
+  Conceptual pipeline (not a theorem):
+
+      LocalPattern
+        ↓ certifies local valuation / run structure
+      AffineDescriptor
+        ↓ composes the certified transformations
+      terminal state
+
+  Working hypothesis:
+
+      2-adic / modular information
+        ↓
+      select or determine LocalPattern
+        ↓
+      AffineDescriptor
+        ↓
+      jump to terminal state
+
+  `LocalPattern` decides / certifies WHICH transformation applies.
+  `AffineDescriptor` executes / compresses THAT transformation.
+
+  No claim is made that the first arrow can be performed without
+  traversing the orbit.  Existing infrastructure
+  (`LocalPairResidue`, `RealizesLocalPattern`, 2-adic refinement)
+  remains the certification layer; this section only adds the
+  composable algebraic image.
+-/
+
+
+/-!
+  ## RESEARCH QUESTION — NOT A THEOREM
+
+  Given initial state `x` and block index `n`:
+
+  Can the aggregate affine descriptor
+
+      (R_n, S_n, C_n)
+
+  be determined from modular / 2-adic information about `x`
+  without enumerating the `n` intermediate Collatz blocks?
+
+  If yes, then
+
+      3 ^ R_n * x + C_n = 2 ^ S_n * y
+
+  would recover the distant state `y` directly.
+
+  KNOWN:
+  * finite affine composition is exact;
+  * inversion is exact once the descriptor is known;
+  * ANTIGRAV has `LocalPairResidue` / `LocalPattern`;
+  * finite 2-adic refinement preserves certified prefixes.
+
+  UNKNOWN (explicitly not claimed here):
+  * descriptor random access;
+  * sublinear computation;
+  * direct n -> required 2-adic precision;
+  * BBP-equivalent Collatz formula.
+
+  The phrase "BBP-like" remains motivational only.
+-/
