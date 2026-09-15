@@ -16681,3 +16681,471 @@ theorem parityCodeDescriptor_append
           affineCompose, List.cons_append, ih, Nat.pow_add,
           Nat.mul_add, Nat.mul_assoc, Nat.add_assoc,
           Nat.mul_left_comm, Nat.mul_comm]
+
+
+/-!
+  ## Block affine transducer
+
+  Pure algebraic lifting of a residue through a fixed affine
+  descriptor.  If
+
+      3^R · r + C = 2^S · a
+
+  then for every high part `h`:
+
+      3^R · (r + 2^S · h) + C = 2^S · (a + 3^R · h)
+
+  Interpretation: if `x = r + 2^S · h` and the descriptor sends
+  `r ↦ a`, the same descriptor sends
+
+      x ↦ a + 3^R · h.
+
+  This is the core of the block affine transducer.  It is NOT yet
+  random access: the lower-block descriptor must already be known
+  / certified.
+-/
+
+
+/--
+  Algebraic high-part lift for an arbitrary affine descriptor.
+
+  Only uses the realizing identity `ha`; no Collatz semantics.
+-/
+theorem affineRealizes_lift_high
+    {d : AffineDescriptor} {r a h : ℕ}
+    (ha : AffineRealizes d r a) :
+    AffineRealizes d
+      (r + 2 ^ d.pow2 * h)
+      (a + 3 ^ d.pow3 * h) := by
+  unfold AffineRealizes at *
+  -- Goal: 3^R (r + 2^S h) + C = 2^S (a + 3^R h)
+  calc
+    3 ^ d.pow3 * (r + 2 ^ d.pow2 * h) + d.correction
+        = 3 ^ d.pow3 * r + 3 ^ d.pow3 * (2 ^ d.pow2 * h) +
+            d.correction := by
+          ring
+    _ = (3 ^ d.pow3 * r + d.correction) +
+            3 ^ d.pow3 * (2 ^ d.pow2 * h) := by
+          ring
+    _ = 2 ^ d.pow2 * a + 3 ^ d.pow3 * (2 ^ d.pow2 * h) := by
+          rw [ha]
+    _ = 2 ^ d.pow2 * a + 2 ^ d.pow2 * (3 ^ d.pow3 * h) := by
+          ring
+    _ = 2 ^ d.pow2 * (a + 3 ^ d.pow3 * h) := by
+          ring
+
+
+/-!
+  Specialization to a parity-code descriptor.  Using the already
+  proved phase identities
+
+      pow2 = bits.length
+      pow3 = parityOnes bits
+
+  one obtains the exact block transducer formula
+
+      T^k (r + 2^k · h) = a_k(r) + 3^{m_k} · h
+
+  when `bits` is the length-`k` parity prefix, `m = parityOnes bits`,
+  and `a` is the image of the residue `r` under that prefix.
+
+  IMPORTANT:
+  this is NOT random access.  The lower-block descriptor must be
+  known / certified before the lift applies.
+-/
+
+
+/--
+  Block affine transducer specialized to `parityCodeDescriptor`.
+-/
+theorem parityCodeDescriptor_lift_high
+    {bits : ParityCode} {r a h : ℕ}
+    (ha :
+      AffineRealizes
+        (parityCodeDescriptor bits) r a) :
+    AffineRealizes
+      (parityCodeDescriptor bits)
+      (r + 2 ^ bits.length * h)
+      (a + 3 ^ parityOnes bits * h) := by
+  -- Rewrite exponents via the existing phase lemmas, then lift.
+  simpa [parityCodeDescriptor_pow2, parityCodeDescriptor_pow3] using
+    (affineRealizes_lift_high (d := parityCodeDescriptor bits) ha)
+
+
+/--
+  Modular form of the block transducer: after lifting, the residue
+  relevant for a subsequent length-`k` block is exactly
+
+      (a + 3^m · h) mod 2^k
+
+  where `k = bits.length` and `m = parityOnes bits`.
+-/
+theorem parityCodeDescriptor_lift_high_mod
+    {bits : ParityCode} {r a h : ℕ}
+    (ha :
+      AffineRealizes
+        (parityCodeDescriptor bits) r a) :
+    AffineRealizes
+      (parityCodeDescriptor bits)
+      (r + 2 ^ bits.length * h)
+      (a + 3 ^ parityOnes bits * h) ∧
+      (a + 3 ^ parityOnes bits * h) % (2 ^ bits.length) =
+        (a + 3 ^ parityOnes bits * h) % (2 ^ bits.length) := by
+  exact ⟨parityCodeDescriptor_lift_high ha, rfl⟩
+
+
+/-!
+  ## Injectivity of `parityCodeDescriptor`
+
+  Strategy (FAIL FIRST): recover the head bit from the parity of
+  `correction`, cancel the first bit by left-cancellation of
+  `parityBitDescriptor`, then induct on the tail.
+
+  Observation for a word `b :: bs` with `d := parityCodeDescriptor bs`:
+
+  * PAR (`b = false`):
+        C(false :: bs) = 2 · C(bs)
+    hence the correction is even.
+
+  * IMPAR (`b = true`):
+        C(true :: bs) = 3^{R(bs)} + 2 · C(bs)
+    hence the correction is odd (`3^R` odd, `2·C` even).
+
+  Therefore the head bit is recovered by
+
+      b₀ = C mod 2.
+
+  Conceptual decoder (not implemented as executable code here):
+
+  * `C mod 2` recovers the first bit;
+  * if even:  `C_tail = C / 2`;
+  * if odd:   `R_tail = R - 1`,
+              `C_tail = (C - 3^{R_tail}) / 2`.
+-/
+
+
+/--
+  PAR head: correction of `false :: bs` is twice the tail correction,
+  hence even.
+-/
+theorem correction_cons_false_even (bs : ParityCode) :
+    Even (parityCodeDescriptor (false :: bs)).correction := by
+  -- Expand: correction = 2 * (parityCodeDescriptor bs).correction
+  -- `even_two_mul` is a simp lemma, so simp closes the goal.
+  simp [parityCodeDescriptor, parityBitDescriptor, affineCompose,
+    pow_one]
+
+
+/--
+  IMPAR head: correction of `true :: bs` is `3^R + 2·C`, hence odd.
+-/
+theorem correction_cons_true_odd (bs : ParityCode) :
+    Odd (parityCodeDescriptor (true :: bs)).correction := by
+  -- Expand: correction = 3^(parityCodeDescriptor bs).pow3
+  --                      + 2 * (parityCodeDescriptor bs).correction
+  have hform :
+      (parityCodeDescriptor (true :: bs)).correction =
+        3 ^ (parityCodeDescriptor bs).pow3 +
+          2 * (parityCodeDescriptor bs).correction := by
+    simp [parityCodeDescriptor, parityBitDescriptor, affineCompose,
+      pow_one]
+  rw [hform]
+  -- 3^R is odd; 2·C is even; odd + even = odd.
+  have h3 : Odd (3 ^ (parityCodeDescriptor bs).pow3) :=
+    Odd.pow (by decide : Odd 3)
+  have h2 : Even (2 * (parityCodeDescriptor bs).correction) :=
+    even_two_mul _
+  exact h3.add_even h2
+
+
+/--
+  Head bit is recovered from the parity of the correction:
+
+      Even C(b :: bs)  ↔  b = false
+-/
+theorem parityCodeDescriptor_correction_even_iff_head_false
+    (b : Bool) (bs : ParityCode) :
+    Even (parityCodeDescriptor (b :: bs)).correction ↔ b = false := by
+  cases b with
+  | false =>
+      constructor
+      · intro _; rfl
+      · intro _; exact correction_cons_false_even bs
+  | true =>
+      constructor
+      · intro hEven
+        -- correction is odd, contradiction with even
+        have hOdd := correction_cons_true_odd bs
+        exact (Nat.not_even_iff_odd.mpr hOdd hEven).elim
+      · intro h
+        cases h
+
+
+/--
+  Left-cancellation of a one-bit affine prefix:
+
+      parityBitDescriptor b ⋆ d₁ = parityBitDescriptor b ⋆ d₂
+        →  d₁ = d₂
+
+  Cases:
+
+  * `b = false`: pow3 of the tail is preserved; pow2 = 1 + tail.pow2;
+    correction = 2 · tail.correction.  Cancel by Nat arithmetic.
+  * `b = true`: pow3 = 1 + tail.pow3; pow2 = 1 + tail.pow2;
+    correction = 3^{tail.pow3} + 2 · tail.correction.
+    Cancel the common `3^R` summand and the factor 2.
+-/
+theorem parityBitDescriptor_left_cancel
+    (b : Bool) {d₁ d₂ : AffineDescriptor}
+    (h :
+      affineCompose (parityBitDescriptor b) d₁ =
+      affineCompose (parityBitDescriptor b) d₂) :
+    d₁ = d₂ := by
+  cases d₁ with
+  | mk p3₁ p2₁ c₁ =>
+    cases d₂ with
+    | mk p3₂ p2₂ c₂ =>
+      cases b with
+      | false =>
+        -- parityBitDescriptor false = (0,1,0)
+        -- composed = (p3, 1+p2, 2*c)
+        have hb : parityBitDescriptor false =
+            { pow3 := 0, pow2 := 1, correction := 0 } := rfl
+        rw [hb] at h
+        have hp3 := congrArg AffineDescriptor.pow3 h
+        have hp2 := congrArg AffineDescriptor.pow2 h
+        have hc := congrArg AffineDescriptor.correction h
+        simp only [affineCompose, pow_one] at hp3 hp2 hc
+        have hp3' : p3₁ = p3₂ := by
+          simpa using hp3
+        have hp2' : p2₁ = p2₂ := by
+          have : 1 + p2₁ = 1 + p2₂ := by
+            simpa using hp2
+          exact Nat.add_left_cancel this
+        have hc' : c₁ = c₂ := by
+          have : 2 * c₁ = 2 * c₂ := by
+            simpa [hp3'] using hc
+          exact Nat.mul_left_cancel (Nat.succ_pos 1) this
+        simp [hp3', hp2', hc']
+      | true =>
+        -- parityBitDescriptor true = (1,1,1)
+        -- composed = (1+p3, 1+p2, 3^p3 + 2*c)
+        have hb : parityBitDescriptor true =
+            { pow3 := 1, pow2 := 1, correction := 1 } := rfl
+        rw [hb] at h
+        have hp3 := congrArg AffineDescriptor.pow3 h
+        have hp2 := congrArg AffineDescriptor.pow2 h
+        have hc := congrArg AffineDescriptor.correction h
+        simp only [affineCompose, pow_one] at hp3 hp2 hc
+        have hp3' : p3₁ = p3₂ := by
+          have : 1 + p3₁ = 1 + p3₂ := by
+            simpa using hp3
+          exact Nat.add_left_cancel this
+        have hp2' : p2₁ = p2₂ := by
+          have : 1 + p2₁ = 1 + p2₂ := by
+            simpa using hp2
+          exact Nat.add_left_cancel this
+        have hc' : c₁ = c₂ := by
+          have hc2 : 3 ^ p3₁ + 2 * c₁ = 3 ^ p3₁ + 2 * c₂ := by
+            simpa [hp3'] using hc
+          exact Nat.mul_left_cancel (Nat.succ_pos 1) (Nat.add_left_cancel hc2)
+        simp [hp3', hp2', hc']
+
+
+/--
+  Empty parity word is the unique word with `pow2 = 0`.
+-/
+theorem parityCodeDescriptor_pow2_eq_zero_iff
+    (bits : ParityCode) :
+    (parityCodeDescriptor bits).pow2 = 0 ↔ bits = [] := by
+  constructor
+  · intro h
+    cases bits with
+    | nil => rfl
+    | cons b bs =>
+        have hlen :
+            (parityCodeDescriptor (b :: bs)).pow2 =
+              (b :: bs).length :=
+          parityCodeDescriptor_pow2 (b :: bs)
+        -- length (b::bs) = succ _ ≠ 0
+        rw [hlen] at h
+        cases h
+  · intro h
+    subst h
+    simp [parityCodeDescriptor, affineId]
+
+
+/--
+  `parityCodeDescriptor` is injective:
+
+      D(u) = D(v)  ⇒  u = v
+
+  Cases:
+
+  * `[]` vs `[]`;
+  * `[]` vs `b :: bs` / `b :: bs` vs `[]` — distinguished by `pow2`
+    (`D([]).pow2 = 0`, while a nonempty word has `pow2 = length > 0`);
+  * `b :: bs` vs `c :: cs` — recover `b = c` from parity of
+    `correction`, left-cancel the common bit, apply IH on the tails.
+
+  INTERPRETATION:
+  `parityCodeDescriptor_injective` shows that the full affine
+  descriptor is a **collision-free** encoding of the finite parity
+  word.  Hence
+
+      ParityCode  ↪  AffineDescriptor.
+
+  The triple `(pow3, pow2, correction)` retains enough information to
+  distinguish every finite word.
+
+  This is an informational statement only:
+  any method whose intermediate result is the complete
+  `AffineDescriptor` still represents the parity-prefix information
+  losslessly.  It rules out the naive hope that `AffineDescriptor` is
+  by itself a many-to-one compression of the itinerary.
+
+  It does NOT prove a time-complexity lower bound, nor that the
+  descriptor cannot be computed by some other sublinear algorithm.
+  Lean has not proved any runtime complexity bound here.
+-/
+theorem parityCodeDescriptor_injective :
+    Function.Injective parityCodeDescriptor := by
+  intro u
+  induction u with
+  | nil =>
+      intro v hv
+      -- D([]) = D(v) ⇒ pow2(v) = 0 ⇒ v = []
+      have hpow :
+          (parityCodeDescriptor v).pow2 = 0 := by
+        have := congrArg AffineDescriptor.pow2 hv
+        simpa [parityCodeDescriptor, affineId] using this.symm
+      exact ((parityCodeDescriptor_pow2_eq_zero_iff v).mp hpow).symm
+  | cons b bs ih =>
+      intro v hv
+      cases v with
+      | nil =>
+          -- nonempty vs empty: pow2 contradiction
+          have hpow :
+              (parityCodeDescriptor (b :: bs)).pow2 = 0 := by
+            have := congrArg AffineDescriptor.pow2 hv
+            simpa [parityCodeDescriptor, affineId] using this
+          have hne :
+              (parityCodeDescriptor (b :: bs)).pow2 ≠ 0 := by
+            intro h0
+            have : b :: bs = [] :=
+              (parityCodeDescriptor_pow2_eq_zero_iff (b :: bs)).mp h0
+            cases this
+          exact (hne hpow).elim
+      | cons c cs =>
+          -- First recover b = c from correction parity.
+          have hcorr :
+              (parityCodeDescriptor (b :: bs)).correction =
+                (parityCodeDescriptor (c :: cs)).correction :=
+            congrArg AffineDescriptor.correction hv
+          have hc_iff :=
+            parityCodeDescriptor_correction_even_iff_head_false c cs
+          have hbc : b = c := by
+            cases b with
+            | false =>
+                have hEven :
+                    Even
+                      (parityCodeDescriptor (false :: bs)).correction :=
+                  correction_cons_false_even bs
+                have hEvenC :
+                    Even
+                      (parityCodeDescriptor (c :: cs)).correction := by
+                  rwa [← hcorr]
+                have : c = false := hc_iff.mp hEvenC
+                simp [this]
+            | true =>
+                have hOdd := correction_cons_true_odd bs
+                have hNotEven :
+                    ¬ Even
+                      (parityCodeDescriptor (true :: bs)).correction :=
+                  Nat.not_even_iff_odd.mpr hOdd
+                have hNotEvenC :
+                    ¬ Even
+                      (parityCodeDescriptor (c :: cs)).correction := by
+                  simpa [hcorr] using hNotEven
+                cases c with
+                | false =>
+                    exact (hNotEvenC (correction_cons_false_even cs)).elim
+                | true =>
+                    rfl
+          -- Substitute common head bit.
+          subst hbc
+          -- Equal total descriptors ⇒ equal composed tails after cancel.
+          have hcomp :
+              affineCompose
+                  (parityBitDescriptor b)
+                  (parityCodeDescriptor bs) =
+                affineCompose
+                  (parityBitDescriptor b)
+                  (parityCodeDescriptor cs) := by
+            simpa [parityCodeDescriptor] using hv
+          have htail :
+              parityCodeDescriptor bs = parityCodeDescriptor cs :=
+            parityBitDescriptor_left_cancel b hcomp
+          have hbs : bs = cs := ih htail
+          simp [hbs]
+
+
+/-!
+  ## Transducer example
+
+  Take `bits = [true, true]`, so
+
+      D = (2, 2, 5)
+
+  Choose residue `r = 3`, high part `h = 6`:
+
+      x = r + 2^2 · h = 3 + 4 · 6 = 27
+
+  Base realization:
+
+      3² · 3 + 5 = 4 · 8
+
+  so the transducer yields
+
+      3² · 27 + 5 = 4 · (8 + 9 · 6) = 4 · 62
+
+  i.e. `T²(27) = 62` under the parity prefix `[true, true]`.
+-/
+
+
+example :
+    parityCodeDescriptor [true, true] =
+      { pow3 := 2, pow2 := 2, correction := 5 } := by
+  native_decide
+
+
+example :
+    AffineRealizes (parityCodeDescriptor [true, true]) 3 8 := by
+  native_decide
+
+
+example :
+    AffineRealizes (parityCodeDescriptor [true, true]) 27 62 := by
+  -- Direct check; equivalently via the lift lemma from (3 ↦ 8), h = 6.
+  native_decide
+
+
+example :
+    AffineRealizes (parityCodeDescriptor [true, true]) 27 62 := by
+  have ha :
+      AffineRealizes (parityCodeDescriptor [true, true]) 3 8 := by
+    native_decide
+  -- r=3, h=6: 3 + 2^2·6 = 27, 8 + 3^2·6 = 62
+  have hlift :=
+    parityCodeDescriptor_lift_high (bits := [true, true])
+      (r := 3) (a := 8) (h := 6) ha
+  -- Reduce length / parityOnes and evaluate the arithmetic.
+  simpa [parityOnes, List.length_cons, List.length_nil] using hlift
+
+
+-- Collision-free on the classical order-swap pair (already present above;
+-- restated here as part of the injectivity package).
+example :
+    parityCodeDescriptor [true, false] ≠
+      parityCodeDescriptor [false, true] := by
+  native_decide
