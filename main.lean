@@ -4183,12 +4183,8 @@ theorem realizesLocalSteps_lift_transport
         have hrepr :
             2 ^ localStepsPrecision r (s :: tail) =
               2 * 2 ^ (localStepsPrecision r (s :: tail) - 1) := by
-          have hEq :
-              localStepsPrecision r (s :: tail) =
-                (localStepsPrecision r (s :: tail) - 1) + 1 := by
-            omega
-          rw [hEq, pow_succ]
-          ring
+          conv_lhs => rw [← Nat.sub_add_cancel hDpos]
+          rw [pow_succ, mul_comm]
         rw [ht, hrepr]
         ring
       have hclose' :
@@ -4226,7 +4222,10 @@ theorem realizesLocalSteps_lift_transport
               mTail * 2 ^ Dtail := by
         rw [hbridge]
         dsimp [mFirst, mTail]
-        have hDt : Dtail = (Dtail - 1) + 1 := by omega
+        have hpow2 :
+            2 * 2 ^ (Dtail - 1) = 2 ^ Dtail := by
+          conv_rhs => rw [← Nat.sub_add_cancel hDtail_pos]
+          rw [pow_succ, mul_comm]
         calc
           localBridgeQuotient r q a b +
                 2 * 3 ^ r * (m * 2 ^ (Dtail - 1)) =
@@ -4235,7 +4234,7 @@ theorem realizesLocalSteps_lift_transport
           _ =
               localBridgeQuotient r q a b +
                 3 ^ r * m * 2 ^ Dtail := by
-            rw [← pow_succ, ← hDt]
+            rw [hpow2]
       -- Apply IH on the tail.
       have hIH :=
         ih (r := b)
@@ -4391,24 +4390,46 @@ theorem extend_positive_local_pattern
     dsimp [Qrep]
     change (Q + xn.q * M₂) % M₂ = Q % M₂
     rw [Nat.add_mul_mod_self_right]
+  have hM₂pos : 0 < M₂ := by
+    dsimp [M₂, localPairModulus]
+    positivity
   have hQge : xn.q ≤ Qrep := by
     dsimp [Qrep]
-    exact Nat.le_add_left _ _
+    calc
+      xn.q ≤ xn.q * M₂ := Nat.le_mul_of_pos_right xn.q hM₂pos
+      _ ≤ Q + xn.q * M₂ := Nat.le_add_left _ _
   let d : ℕ := Qrep - xn.q
   have hd_even : Even d := by
-    rcases hQodd with ⟨u, hu⟩
-    rcases hqn with ⟨v, hv⟩
-    have hrepr :
-        d = Q + xn.q * 2 ^ (s.closing + s.nextR + 1) - xn.q := by
-      dsimp [d, Qrep, M₂, localPairModulus]
-      rfl
-    refine ⟨u + (2 * v + 1) * 2 ^ (s.closing + s.nextR) - v, ?_⟩
-    rw [hrepr, hu, hv, pow_succ]
-    omega
+    -- d = Q + xn.q * M₂ - xn.q = Q + xn.q * (M₂ - 1)
+    have hM₂one : 1 ≤ M₂ := Nat.succ_le_of_lt hM₂pos
+    have hle : xn.q ≤ xn.q * M₂ :=
+      Nat.le_mul_of_pos_right xn.q hM₂pos
+    have hEq : d = Q + xn.q * (M₂ - 1) := by
+      dsimp [d, Qrep]
+      rw [Nat.add_sub_assoc hle]
+      have hsplit :
+          xn.q * M₂ - xn.q = xn.q * (M₂ - 1) := by
+        calc
+          xn.q * M₂ - xn.q = xn.q * M₂ - xn.q * 1 := by
+            rw [mul_one]
+          _ = xn.q * (M₂ - 1) := by
+            rw [← Nat.mul_sub_left_distrib]
+      rw [hsplit]
+    -- M₂ = 2^{a+b+1} is even, so M₂ - 1 is odd.
+    have hM₂even : Even M₂ := by
+      dsimp [M₂, localPairModulus]
+      refine ⟨2 ^ (s.closing + s.nextR), ?_⟩
+      rw [pow_succ]
+      ring
+    have hM₂odd : Odd (M₂ - 1) :=
+      Nat.Even.sub_odd hM₂one hM₂even odd_one
+    have hprod : Odd (xn.q * (M₂ - 1)) := hqn.mul hM₂odd
+    rw [hEq]
+    exact Odd.add_odd hQodd hprod
   let d' : ℕ := d / 2
   have hdd' : d = 2 * d' := by
     dsimp [d']
-    exact (Even.two_mul_div_two hd_even).symm
+    exact (Nat.two_mul_div_two_of_even hd_even).symm
   -- Solve 3^P * m ≡ d' (mod 2^{closing+nextR}); invert only the odd unit.
   have hu3 :
       IsUnit (((3 ^ P : ℕ) : ZMod Mhalf)) := by
@@ -4447,7 +4468,7 @@ theorem extend_positive_local_pattern
     have hm2 :
         Nat.ModEq (2 * Mhalf)
           (2 * (3 ^ P * m)) (2 * d') :=
-      (hmod_half.mul_left 2)
+          hmod_half.mul_left' 2
     rw [hMeq, hdd']
     simpa [mul_assoc] using hm2
   -- Refined initial coordinate.
@@ -4465,9 +4486,8 @@ theorem extend_positive_local_pattern
     refine ⟨t + m * 2 ^ (D - 1), ?_⟩
     dsimp [q']
     have hrepr : 2 ^ D = 2 * 2 ^ (D - 1) := by
-      have hEq : D = (D - 1) + 1 := by omega
-      rw [hEq, pow_succ]
-      ring
+      conv_lhs => rw [← Nat.sub_add_cancel hDpos]
+      rw [pow_succ, mul_comm]
     rw [ht, hrepr]
     ring
   -- Terminal quotient after lift.
@@ -4480,8 +4500,8 @@ theorem extend_positive_local_pattern
     simpa [hD, hP, localPatternPrecision, localPatternRunWeight,
       r, steps] using htermQ
   have hxn'r : xn'.r = xn.r := by
-    dsimp [xn', xn] at htermR ⊢
-    simpa using htermR
+    dsimp [xn', xn, q']
+    simpa [hD] using htermR
   -- New step residue at the lifted terminal.
   have hbridge_mod :
       Nat.ModEq M₂ xn'.q Q := by
