@@ -17149,3 +17149,612 @@ example :
     parityCodeDescriptor [true, false] ≠
       parityCodeDescriptor [false, true] := by
   native_decide
+
+
+/-!
+# EXACT REFINEMENT BEFORE MINIMIZATION
+
+The correct recurrence is
+
+    E_k → E_{k+1}
+
+on **exact** states `(m, a)`.
+
+Only afterwards does one project
+
+    (m, a) ↦ (a mod 2^k ,  3^m mod 2^k).
+
+Do NOT claim a direct recurrence between minimized machines:
+
+    S_k^{min}  ⇏  S_{k+1}^{min}
+
+without additional information.
+
+Layers kept deliberately separate (FAIL FIRST):
+
+1. exact state `(m, a)`;
+2. modular projection;
+3. future minimization.
+
+In particular, this file does **not** assert that the projected pair
+`(m, a mod 2^k)` is closed under refinement.  The counter-example
+`exact_projection_not_closed_mod2` below records that knowing only
+`a mod 2^k` can be insufficient to climb one precision level.
+
+Exact one-level generator formalized here:
+
+    (m, a, β)  ↦  ( m + b ,  (3^b · (a + 3^m · β) + b) / 2 )
+
+where
+
+    b = (a + β) mod 2,     β ∈ {0, 1}.
+
+Reuses (does not duplicate):
+`AffineDescriptor`, `AffineRealizes`, `ParityCode`, `ParityStep`,
+`parityOnes`, `parityCodeDescriptor`, `affineRealizes_lift_high`,
+`parityCodeDescriptor_lift_high`, `parityCodeDescriptor_injective`,
+`parityStep_affineRealizes`, `parityCodeDescriptor_append`.
+-/
+
+
+/--
+  Exact parity-tracking state before any modular projection.
+
+  * `oddCount` = `m` = number of odd (IMPAR) steps so far;
+  * `value`    = `a` = exact image under the prefix (not reduced mod 2^k).
+-/
+structure ExactParityState where
+  oddCount : ℕ
+  value    : ℕ
+  deriving DecidableEq, Repr
+
+
+/-- Bit of lift: `true ↦ 1`, `false ↦ 0`. -/
+def parityLiftBit (β : Bool) : ℕ :=
+  if β then 1 else 0
+
+
+theorem parityLiftBit_le_one (β : Bool) : parityLiftBit β ≤ 1 := by
+  cases β <;> simp [parityLiftBit]
+
+
+theorem parityLiftBit_mod_two (β : Bool) :
+    parityLiftBit β % 2 = parityLiftBit β := by
+  cases β <;> simp [parityLiftBit]
+
+
+/-- Exact one-level lift of the value: `a + 3^m · β`. -/
+def exactLiftValue (s : ExactParityState) (β : Bool) : ℕ :=
+  s.value + 3 ^ s.oddCount * parityLiftBit β
+
+
+/-- Next normalized parity bit of the lifted value: `y mod 2`. -/
+def exactNextBit (s : ExactParityState) (β : Bool) : ℕ :=
+  exactLiftValue s β % 2
+
+
+/--
+  Because `3^m` is odd,
+
+      (a + 3^m · β) ≡ a + β  (mod 2).
+
+  This is the exact bit identity
+
+      b_k ≡ a + β (mod 2).
+-/
+theorem exactNextBit_eq
+    (s : ExactParityState) (β : Bool) :
+    exactNextBit s β =
+      (s.value + parityLiftBit β) % 2 := by
+  unfold exactNextBit exactLiftValue
+  have h3 : (3 ^ s.oddCount) % 2 = 1 :=
+    Nat.odd_iff.mp (Odd.pow (by decide : Odd 3))
+  -- (a + 3^m·β) % 2 = (a % 2 + (3^m % 2)·(β % 2) % 2) % 2
+  --                  = (a % 2 + β % 2) % 2
+  --                  = (a + β) % 2
+  rw [Nat.add_mod, Nat.mul_mod, h3, Nat.one_mul, Nat.mod_mod,
+    ← Nat.add_mod]
+
+
+/-- The next bit is a genuine bit: `b ∈ {0, 1}`. -/
+theorem exactNextBit_le_one
+    (s : ExactParityState) (β : Bool) :
+    exactNextBit s β ≤ 1 := by
+  unfold exactNextBit
+  exact Nat.lt_succ_iff.mp
+    (Nat.mod_lt (exactLiftValue s β) (by decide : 0 < 2))
+
+
+/--
+  Exact one-level refinement generator
+
+      (m, a, β)  ↦  ( m + b ,  (3^b · y + b) / 2 )
+
+  with `y = a + 3^m · β` and `b = y mod 2`.
+-/
+def refineExactParityState
+    (s : ExactParityState) (β : Bool) : ExactParityState :=
+  let y := exactLiftValue s β
+  let b := y % 2
+  {
+    oddCount := s.oddCount + b
+    value := (3 ^ b * y + b) / 2
+  }
+
+
+/-- Unfolded form of the unified exact recurrence. -/
+theorem refineExactParityState_formula
+    (s : ExactParityState) (β : Bool) :
+    (refineExactParityState s β).oddCount =
+      s.oddCount + exactNextBit s β ∧
+    (refineExactParityState s β).value =
+      (3 ^ exactNextBit s β * exactLiftValue s β +
+        exactNextBit s β) / 2 := by
+  simp [refineExactParityState, exactNextBit]
+
+
+/--
+  Even branch of exact refinement:
+
+      exactNextBit s β = 0  ⇒  m' = m,  a' = y / 2.
+-/
+theorem refineExactParityState_bit_zero
+    (s : ExactParityState) (β : Bool)
+    (hb : exactNextBit s β = 0) :
+    refineExactParityState s β =
+      { oddCount := s.oddCount
+        value := exactLiftValue s β / 2 } := by
+  unfold refineExactParityState exactNextBit at *
+  have hy : exactLiftValue s β % 2 = 0 := hb
+  -- m' = m + 0; a' = (3^0·y + 0)/2 = y/2
+  simp [hy, pow_zero]
+
+
+/--
+  Odd branch of exact refinement:
+
+      exactNextBit s β = 1  ⇒  m' = m + 1,  a' = (3 · y + 1) / 2.
+-/
+theorem refineExactParityState_bit_one
+    (s : ExactParityState) (β : Bool)
+    (hb : exactNextBit s β = 1) :
+    refineExactParityState s β =
+      { oddCount := s.oddCount + 1
+        value := (3 * exactLiftValue s β + 1) / 2 } := by
+  unfold refineExactParityState exactNextBit at *
+  have hy : exactLiftValue s β % 2 = 1 := hb
+  -- m' = m + 1; a' = (3^1·y + 1)/2 = (3·y + 1)/2
+  simp [hy, pow_one]
+
+
+/--
+  The exact value after refinement is always the integer half of
+  `3^b · y + b` (division is exact on both branches).
+-/
+theorem refineExactParityState_value_mul_two
+    (s : ExactParityState) (β : Bool) :
+    2 * (refineExactParityState s β).value =
+      3 ^ exactNextBit s β * exactLiftValue s β +
+        exactNextBit s β := by
+  unfold refineExactParityState exactNextBit
+  set y := exactLiftValue s β
+  set b := y % 2
+  -- `b ∈ {0,1}` and on each branch `3^b·y + b` is even.
+  have hb_le : b ≤ 1 :=
+    Nat.lt_succ_iff.mp (Nat.mod_lt y (by decide : 0 < 2))
+  have hdiv :
+      2 * ((3 ^ b * y + b) / 2) = 3 ^ b * y + b := by
+    -- Cases on the bit.
+    have hb_cases : b = 0 ∨ b = 1 := by
+      omega
+    rcases hb_cases with hb0 | hb1
+    · -- even y: y = 2*(y/2)
+      have hy0 : y % 2 = 0 := hb0
+      have hy_even : Even y := Nat.even_iff.mpr hy0
+      have hy_eq : 2 * (y / 2) = y := by
+        have := Nat.div_add_mod y 2
+        simpa [hy0] using this
+      simp [hb0, pow_zero, hy_eq]
+    · -- odd y: 3y+1 even
+      have hy1 : y % 2 = 1 := hb1
+      have hy_odd : Odd y := Nat.odd_iff.mpr hy1
+      -- 3 odd, y odd ⇒ 3y odd ⇒ 3y+1 even
+      have h3y_odd : Odd (3 * y) := (by decide : Odd 3).mul hy_odd
+      have hnum_even : Even (3 * y + 1) := h3y_odd.add_one
+      have hnum_eq : 2 * ((3 * y + 1) / 2) = 3 * y + 1 := by
+        have := Nat.div_add_mod (3 * y + 1) 2
+        have hmod : (3 * y + 1) % 2 = 0 := Nat.even_iff.mp hnum_even
+        simpa [hmod] using this
+      simpa [hb1, pow_one] using hnum_eq
+  simpa using hdiv
+
+
+/--
+  Unified boxed recurrence:
+
+      (m', a')
+        = ( m + b ,  (3^b · (a + 3^m · β) + b) / 2 )
+
+  with `b = exactNextBit s β`.
+-/
+theorem refineExactParityState_unified
+    (s : ExactParityState) (β : Bool) :
+    let y := exactLiftValue s β
+    let b := exactNextBit s β
+    let s' := refineExactParityState s β
+    s'.oddCount = s.oddCount + b ∧
+      2 * s'.value = 3 ^ b * y + b := by
+  intro y b s'
+  refine ⟨?_, ?_⟩
+  · simpa [y, b, s'] using
+      (refineExactParityState_formula s β).1
+  · simpa [y, b, s'] using
+      refineExactParityState_value_mul_two s β
+
+
+/-!
+  ## Bridge with the already formalized transducer
+
+  For `bits : ParityCode` with `m = parityOnes bits`, if
+
+      AffineRealizes (parityCodeDescriptor bits) r a
+
+  then for any refinement bit `β`, the lifted residue
+
+      r_β = r + 2^{|bits|} · β
+
+  is sent by the same prefix to
+
+      y = a + 3^m · β.
+
+  This is exactly `parityCodeDescriptor_lift_high` (not re-proved).
+-/
+
+
+/--
+  One-bit high-part lift of a certified parity-code realization.
+  Direct specialization of `parityCodeDescriptor_lift_high`.
+-/
+theorem parityCodeDescriptor_lift_bit
+    {bits : ParityCode} {r a : ℕ} (β : Bool)
+    (ha :
+      AffineRealizes (parityCodeDescriptor bits) r a) :
+    AffineRealizes (parityCodeDescriptor bits)
+      (r + 2 ^ bits.length * parityLiftBit β)
+      (a + 3 ^ parityOnes bits * parityLiftBit β) :=
+  parityCodeDescriptor_lift_high ha
+
+
+/-- Exact state read off a certified parity-code image. -/
+def exactStateOfParity
+    (bits : ParityCode) (a : ℕ) : ExactParityState where
+  oddCount := parityOnes bits
+  value := a
+
+
+theorem exactLiftValue_exactStateOfParity
+    (bits : ParityCode) (a : ℕ) (β : Bool) :
+    exactLiftValue (exactStateOfParity bits a) β =
+      a + 3 ^ parityOnes bits * parityLiftBit β := by
+  simp [exactLiftValue, exactStateOfParity]
+
+
+/--
+  After lifting by a single bit `β`, the next normalized parity bit is
+
+      y mod 2 = (a + β) mod 2.
+-/
+theorem exactNextBit_exactStateOfParity
+    (bits : ParityCode) (a : ℕ) (β : Bool) :
+    exactNextBit (exactStateOfParity bits a) β =
+      (a + parityLiftBit β) % 2 := by
+  simpa [exactStateOfParity] using
+    exactNextBit_eq (exactStateOfParity bits a) β
+
+
+/--
+  Lifted residue / image pair under a certified parity prefix.
+-/
+theorem parityCodeDescriptor_lift_bit_exact
+    {bits : ParityCode} {r a : ℕ} (β : Bool)
+    (ha :
+      AffineRealizes (parityCodeDescriptor bits) r a) :
+    let s := exactStateOfParity bits a
+    let rβ := r + 2 ^ bits.length * parityLiftBit β
+    let y := exactLiftValue s β
+    AffineRealizes (parityCodeDescriptor bits) rβ y := by
+  intro s rβ y
+  -- y = a + 3^m · β by definition of exactStateOfParity
+  simpa [s, rβ, y, exactLiftValue_exactStateOfParity] using
+    (parityCodeDescriptor_lift_bit (bits := bits) (r := r) (a := a) β ha)
+
+
+/-- Boolean form of the next exact bit. -/
+def exactNextBool (s : ExactParityState) (β : Bool) : Bool :=
+  decide (exactNextBit s β = 1)
+
+
+theorem exactNextBool_true_iff
+    (s : ExactParityState) (β : Bool) :
+    exactNextBool s β = true ↔ exactNextBit s β = 1 := by
+  simp [exactNextBool]
+
+
+theorem exactNextBool_false_iff
+    (s : ExactParityState) (β : Bool) :
+    exactNextBool s β = false ↔ exactNextBit s β = 0 := by
+  simp [exactNextBool]
+  have hle := exactNextBit_le_one s β
+  omega
+
+
+/--
+  The exact refinement step is a genuine `ParityStep` from the lifted
+  value `y` to the refined value `a'`.
+-/
+theorem refineExactParityState_parityStep
+    (s : ExactParityState) (β : Bool) :
+    ParityStep
+      (exactNextBool s β)
+      (exactLiftValue s β)
+      (refineExactParityState s β).value := by
+  unfold ParityStep exactNextBool
+  have hmul := refineExactParityState_value_mul_two s β
+  have hle := exactNextBit_le_one s β
+  -- Case split on the next bit ∈ {0,1}.
+  have hbit : exactNextBit s β = 0 ∨ exactNextBit s β = 1 := by
+    omega
+  rcases hbit with hb0 | hb1
+  · -- PAR branch
+    have hdecide : decide (exactNextBit s β = 1) = false := by
+      simp [hb0]
+    simp [hdecide]
+    -- Even y and y = 2 * a'
+    have hy0 : exactLiftValue s β % 2 = 0 := by
+      simpa [exactNextBit] using hb0
+    have hy_even : Even (exactLiftValue s β) := Nat.even_iff.mpr hy0
+    refine ⟨hy_even, ?_⟩
+    -- From hmul with b=0: 2*a' = y
+    have hmul0 :
+        2 * (refineExactParityState s β).value =
+          exactLiftValue s β := by
+      simpa [hb0, pow_zero] using hmul
+    exact hmul0.symm
+  · -- IMPAR branch
+    have hdecide : decide (exactNextBit s β = 1) = true := by
+      simp [hb1]
+    simp [hdecide]
+    have hy1 : exactLiftValue s β % 2 = 1 := by
+      simpa [exactNextBit] using hb1
+    have hy_odd : Odd (exactLiftValue s β) := Nat.odd_iff.mpr hy1
+    refine ⟨hy_odd, ?_⟩
+    -- From hmul with b=1: 2*a' = 3*y + 1
+    have hmul1 :
+        2 * (refineExactParityState s β).value =
+          3 * exactLiftValue s β + 1 := by
+      simpa [hb1, pow_one] using hmul
+    exact hmul1.symm
+
+
+/--
+  Bridge: extending a certified parity prefix by the exact next bit
+  realizes the refined exact state on the lifted residue.
+
+  Uses `parityCodeDescriptor_lift_high`, `parityStep_affineRealizes`,
+  `parityCodeDescriptor_append` and `affineCompose_realizes`.
+-/
+theorem refineExactParityState_affineRealizes
+    {bits : ParityCode} {r a : ℕ} (β : Bool)
+    (ha :
+      AffineRealizes (parityCodeDescriptor bits) r a) :
+    let s := exactStateOfParity bits a
+    let s' := refineExactParityState s β
+    let rβ := r + 2 ^ bits.length * parityLiftBit β
+    let b := exactNextBool s β
+    AffineRealizes
+      (parityCodeDescriptor (bits ++ [b]))
+      rβ s'.value := by
+  intro s s' rβ b
+  -- Prefix sends rβ ↦ y
+  have hPrefix :
+      AffineRealizes (parityCodeDescriptor bits) rβ
+        (exactLiftValue s β) := by
+    simpa [s, rβ] using
+      parityCodeDescriptor_lift_bit_exact (bits := bits) (r := r)
+        (a := a) β ha
+  -- One more ParityStep y ↦ s'.value
+  have hStep :
+      ParityStep b (exactLiftValue s β) s'.value := by
+    simpa [s, s', b] using refineExactParityState_parityStep s β
+  have hBit :
+      AffineRealizes (parityBitDescriptor b)
+        (exactLiftValue s β) s'.value :=
+    parityStep_affineRealizes hStep
+  -- Descriptor of the singleton extension
+  have hDesc :
+      parityCodeDescriptor (bits ++ [b]) =
+        affineCompose
+          (parityCodeDescriptor bits)
+          (parityBitDescriptor b) := by
+    -- parityCodeDescriptor [b] = parityBitDescriptor b
+    have hsing :
+        parityCodeDescriptor [b] = parityBitDescriptor b := by
+      simp [parityCodeDescriptor, affineCompose_id_right]
+    simpa [hsing] using parityCodeDescriptor_append bits [b]
+  -- Compose realizations
+  have hComp :=
+    affineCompose_realizes hPrefix hBit
+  simpa [hDesc, s', rβ] using hComp
+
+
+/--
+  The two one-level extensions of a parity prefix are descriptor-distinct.
+  Uses `parityCodeDescriptor_injective` (no new injectivity proof).
+-/
+theorem parityCodeDescriptor_cons_bit_ne
+    (bits : ParityCode) :
+    parityCodeDescriptor (bits ++ [false]) ≠
+      parityCodeDescriptor (bits ++ [true]) := by
+  intro h
+  have heq : bits ++ [false] = bits ++ [true] :=
+    parityCodeDescriptor_injective h
+  have hbit : (false : Bool) = true := by
+    have := congrArg (fun l : List Bool => l.getLast?) heq
+    simp at this
+  exact Bool.false_ne_true hbit
+
+
+/-!
+  ## Projection failure (FAIL FIRST)
+
+  Modular agreement of the exact value does **not** imply agreement
+  of the refined exact states.
+
+      2 ≡ 0 (mod 2),
+
+  but with `m = 1` and `β = 0`:
+
+      2 ↦ 1,     0 ↦ 0.
+
+  So knowing only `a mod 2^k` can be insufficient to refine.
+-/
+
+
+/--
+  Concrete witness that projection mod 2 is not a congruence for
+  exact refinement when the odd-count is held fixed.
+-/
+theorem exact_projection_not_closed_mod2 :
+    let s2 : ExactParityState := { oddCount := 1, value := 2 }
+    let s0 : ExactParityState := { oddCount := 1, value := 0 }
+    s2.value % 2 = s0.value % 2 ∧
+      refineExactParityState s2 false =
+        { oddCount := 1, value := 1 } ∧
+      refineExactParityState s0 false =
+        { oddCount := 1, value := 0 } ∧
+      refineExactParityState s2 false ≠
+        refineExactParityState s0 false := by
+  native_decide
+
+
+/-!
+  ## Example 27 — one-level exact refinement
+
+  Prefix `bits = [true, true]`:
+
+      r = 3,  m = 2,  a = 8.
+
+  One-level refinement bit `β = 1` (NOT the old high-part `h = 6`):
+
+      y = 8 + 3² · 1 = 17
+      b = 17 mod 2 = 1
+      (m', a') = (3, (3 · 17 + 1) / 2) = (3, 26)
+
+  The lifted residue is the length-`k` child
+
+      r_β = 3 + 2² · 1 = 7
+
+  (strictly `k → k+1`; the classical identity `27 = 3 + 4 · 6` uses a
+  multi-bit high part and is *not* a one-level refinement bit).
+-/
+
+
+private def exactEx27_bits : ParityCode := [true, true]
+
+
+private def exactEx27_state : ExactParityState where
+  oddCount := 2
+  value := 8
+
+
+example : parityOnes exactEx27_bits = 2 := by native_decide
+example : exactEx27_bits.length = 2 := by native_decide
+
+
+example :
+    AffineRealizes
+      (parityCodeDescriptor exactEx27_bits) 3 8 := by
+  native_decide
+
+
+example :
+    exactLiftValue exactEx27_state true = 17 ∧
+      exactNextBit exactEx27_state true = 1 ∧
+      refineExactParityState exactEx27_state true =
+        { oddCount := 3, value := 26 } := by
+  native_decide
+
+
+/-- Both length-`k` children of `r = 3` under one-level refinement. -/
+example :
+    refineExactParityState exactEx27_state false =
+      { oddCount := 2, value := 4 } ∧
+    refineExactParityState exactEx27_state true =
+      { oddCount := 3, value := 26 } := by
+  native_decide
+
+
+/--
+  Lifted residues:
+  * `β = 0`: `r = 3` maps to `y = 8`, then PAR to `4`;
+  * `β = 1`: `r = 7` maps to `y = 17`, then IMPAR to `26`.
+-/
+example :
+    AffineRealizes
+      (parityCodeDescriptor exactEx27_bits) 3 8 ∧
+    AffineRealizes
+      (parityCodeDescriptor exactEx27_bits) 7 17 := by
+  native_decide
+
+
+example :
+    AffineRealizes
+      (parityCodeDescriptor (exactEx27_bits ++ [false])) 3 4 := by
+  native_decide
+
+
+example :
+    AffineRealizes
+      (parityCodeDescriptor (exactEx27_bits ++ [true])) 7 26 := by
+  native_decide
+
+
+/--
+  Same facts via the bridge lemmas (not only `native_decide`).
+-/
+example :
+    AffineRealizes
+      (parityCodeDescriptor (exactEx27_bits ++ [true])) 7 26 := by
+  have ha :
+      AffineRealizes (parityCodeDescriptor exactEx27_bits) 3 8 := by
+    native_decide
+  -- Apply the exact-refinement bridge with β = true.
+  have h :=
+    refineExactParityState_affineRealizes
+      (bits := exactEx27_bits) (r := 3) (a := 8) true ha
+  -- Reduce definitions to the concrete numbers.
+  simpa [exactEx27_bits, exactStateOfParity, parityOnes,
+    exactLiftValue, parityLiftBit, refineExactParityState,
+    exactNextBit, exactNextBool, List.length_cons, List.length_nil]
+    using h
+
+
+/--
+  Bit identity on the example state:
+
+      b ≡ a + β (mod 2).
+-/
+example :
+    exactNextBit exactEx27_state true =
+      (exactEx27_state.value + parityLiftBit true) % 2 :=
+  exactNextBit_eq exactEx27_state true
+
+
+/-- Projection-failure witness, restated as a bare `example`. -/
+example :
+    (2 : ℕ) % 2 = (0 : ℕ) % 2 ∧
+      refineExactParityState ⟨1, 2⟩ false =
+        ⟨1, 1⟩ ∧
+      refineExactParityState ⟨1, 0⟩ false =
+        ⟨1, 0⟩ := by
+  native_decide
