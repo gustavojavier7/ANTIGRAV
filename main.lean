@@ -16135,3 +16135,549 @@ example :
 
   The phrase "BBP-like" remains motivational only.
 -/
+
+
+/-!
+# PARITY CODE → AFFINE DESCRIPTOR
+
+This subsection sits inside the affine / BBP-like research section.
+It formalizes a small bridge:
+
+    algebraic parity word  (ParityCode)
+      →  AffineDescriptor
+      →  AffineRealizes
+
+Three layers are kept deliberately distinct:
+
+1. algebraic bit word (`ParityCode` / `parityCodeDescriptor`);
+2. Collatz-realized word (`RealizesParityCode` / `ParityStep`);
+3. future 2-adic interface `Q` (comment only; not formalized here).
+
+Normalized one-step Collatz used in this section (NOT `Tstar`):
+
+* PAR   (`false`):  `x → x / 2`          via  `Even x ∧ x = 2 * y`
+* IMPAR (`true`):   `x → (3*x + 1) / 2`  via  `Odd x ∧ 3*x + 1 = 2 * y`
+
+`Tstar` removes the full power of two after `3*x+1`.  Here every step
+consumes exactly one factor of two, so a word of length `k` always
+contributes `pow2 = k`.
+
+FAIL FIRST:
+* A bit word is not automatically a Collatz trajectory.
+* An affine descriptor is not automatically a Collatz trajectory.
+* Realization must be certified by `ParityStep` / `RealizesParityCode`.
+* No random-access, no full `ℤ₂` theory, no BBP formula is claimed.
+-/
+
+
+/--
+  Finite chronological word of parity decisions.
+
+  Convention:
+  * `false` = PAR step
+  * `true`  = IMPAR step
+
+  Order is chronological: `[b₀, b₁, ..., bₙ₋₁]` with `b₀` acting on
+  the initial state.
+-/
+abbrev ParityCode := List Bool
+
+
+/--
+  One normalized Collatz parity step as an exact algebraic relation.
+
+  * `b = true`  (IMPAR): `Odd x ∧ 3 * x + 1 = 2 * y`
+  * `b = false` (PAR):   `Even x ∧ x = 2 * y`
+
+  Certifies both the chosen branch and the exact multiplicative
+  identity.  Nat division is not the primary semantics.
+-/
+def ParityStep (b : Bool) (x y : ℕ) : Prop :=
+  if b then
+    Odd x ∧ 3 * x + 1 = 2 * y
+  else
+    Even x ∧ x = 2 * y
+
+
+/--
+  Affine descriptor of a single parity bit.
+
+  PAR (`false`):
+      x = 2 * y
+    ⇔  3^0 * x + 0 = 2^1 * y
+    ⇔  D = (0, 1, 0)
+
+  IMPAR (`true`):
+      3 * x + 1 = 2 * y
+    ⇔  3^1 * x + 1 = 2^1 * y
+    ⇔  D = (1, 1, 1)
+-/
+def parityBitDescriptor (b : Bool) : AffineDescriptor :=
+  if b then
+    { pow3 := 1, pow2 := 1, correction := 1 }
+  else
+    { pow3 := 0, pow2 := 1, correction := 0 }
+
+
+/--
+  One certified `ParityStep` realizes its one-bit affine descriptor.
+-/
+theorem parityStep_affineRealizes
+    {b : Bool} {x y : ℕ}
+    (h : ParityStep b x y) :
+    AffineRealizes (parityBitDescriptor b) x y := by
+  cases b with
+  | true =>
+      unfold ParityStep parityBitDescriptor AffineRealizes at *
+      simp at h
+      -- h.2 : 3 * x + 1 = 2 * y
+      simpa [pow_one] using h.2
+  | false =>
+      unfold ParityStep parityBitDescriptor AffineRealizes at *
+      simp at h
+      -- h.2 : x = 2 * y
+      -- goal: 3^0 * x + 0 = 2^1 * y
+      simpa [pow_zero, pow_one] using h.2
+
+
+/--
+  A parity word is realized by an actual normalized Collatz trajectory
+  from `x` to `y`.
+
+  * `[]` realizes the identity `x ↦ x`
+  * `b :: bs` takes one `ParityStep b` then realizes the tail
+
+  This is intentionally NOT defined as `AffineRealizes`: the bit word
+  keeps Collatz meaning; the affine bridge is a theorem.
+-/
+inductive RealizesParityCode : ParityCode → ℕ → ℕ → Prop
+  | nil (x : ℕ) :
+      RealizesParityCode [] x x
+  | cons {b : Bool} {bs : ParityCode} {x y z : ℕ}
+      (hstep : ParityStep b x y)
+      (htail : RealizesParityCode bs y z) :
+      RealizesParityCode (b :: bs) x z
+
+
+/--
+  Compile a parity word into one affine descriptor.
+
+  Orientation matches chronology:
+
+      x --b₀--> x₁ --b₁--> ... --bₙ₋₁--> y
+
+  so
+
+      parityCodeDescriptor (b :: bs)
+        = affineCompose
+            (parityBitDescriptor b)
+            (parityCodeDescriptor bs)
+-/
+def parityCodeDescriptor : ParityCode → AffineDescriptor
+  | [] => affineId
+  | b :: bs =>
+      affineCompose
+        (parityBitDescriptor b)
+        (parityCodeDescriptor bs)
+
+
+/--
+  CENTRAL BRIDGE:
+
+  every Collatz-realized parity word realizes its compiled
+  `AffineDescriptor`.
+
+      RealizesParityCode bits x y
+        →  AffineRealizes (parityCodeDescriptor bits) x y
+-/
+theorem realizesParityCode_affineRealizes
+    {bits : ParityCode} {x y : ℕ}
+    (h : RealizesParityCode bits x y) :
+    AffineRealizes (parityCodeDescriptor bits) x y := by
+  induction h with
+  | nil x =>
+      simpa [parityCodeDescriptor] using affineRealizes_id x
+  | cons hstep htail ih =>
+      -- hstep : ParityStep b x y
+      -- ih    : AffineRealizes (parityCodeDescriptor bs) y z
+      simpa [parityCodeDescriptor] using
+        affineCompose_realizes
+          (parityStep_affineRealizes hstep) ih
+
+
+/--
+  Number of IMPAR (`true`) bits in a parity word.
+  Defined explicitly to avoid depending on `List.count` details.
+-/
+def parityOnes : ParityCode → ℕ
+  | [] => 0
+  | b :: bs => (if b then 1 else 0) + parityOnes bs
+
+
+/--
+  For a word of length `k`, the compiled descriptor has `pow2 = k`.
+-/
+theorem parityCodeDescriptor_pow2 (bits : ParityCode) :
+    (parityCodeDescriptor bits).pow2 = bits.length := by
+  induction bits with
+  | nil =>
+      simp [parityCodeDescriptor, affineId]
+  | cons b bs ih =>
+      cases b <;>
+        simp [parityCodeDescriptor, parityBitDescriptor,
+          affineCompose, ih, Nat.add_comm]
+
+
+/--
+  For a word with `m = parityOnes bits` odd steps, the compiled
+  descriptor has `pow3 = m`.
+-/
+theorem parityCodeDescriptor_pow3 (bits : ParityCode) :
+    (parityCodeDescriptor bits).pow3 = parityOnes bits := by
+  induction bits with
+  | nil =>
+      simp [parityCodeDescriptor, affineId, parityOnes]
+  | cons b bs ih =>
+      cases b <;>
+        simp [parityCodeDescriptor, parityBitDescriptor,
+          affineCompose, parityOnes, ih]
+
+
+/-!
+  ## Order of bits matters
+
+  Both words
+
+      [true, false]   -- IMPAR then PAR
+      [false, true]   -- PAR then IMPAR
+
+  have
+
+      length = 2
+      parityOnes = 1
+
+  hence the same aggregate phase data
+
+      pow3 = 1
+      pow2 = 2
+
+  but different corrections:
+
+  * IMPAR then PAR:  `3x + 1 = 4z`  ⇒  `D₁₀ = (1, 2, 1)`
+  * PAR then IMPAR:  `3x + 2 = 4z`  ⇒  `D₀₁ = (1, 2, 2)`
+
+  Division of responsibilities (not a critique of `RhinBridge`):
+
+  * `PhaseGap` / `RhinBridge`: aggregated phase / drift information
+    of the form `m log₂ 3 − k`;
+  * `ParityCode`: ordered sequence of branch decisions;
+  * `AffineDescriptor.correction`: algebraic image of that order.
+
+  A quantity depending only on `m log₂ 3 − k` cannot reconstruct the
+  parity word in general.
+-/
+
+
+example :
+    parityCodeDescriptor [true, false] =
+      { pow3 := 1, pow2 := 2, correction := 1 } := by
+  native_decide
+
+
+example :
+    parityCodeDescriptor [false, true] =
+      { pow3 := 1, pow2 := 2, correction := 2 } := by
+  native_decide
+
+
+example :
+    (parityCodeDescriptor [true, false]).correction = 1 := by
+  native_decide
+
+
+example :
+    (parityCodeDescriptor [false, true]).correction = 2 := by
+  native_decide
+
+
+example :
+    (parityCodeDescriptor [true, false]).pow3 = 1 ∧
+      (parityCodeDescriptor [true, false]).pow2 = 2 ∧
+      (parityCodeDescriptor [false, true]).pow3 = 1 ∧
+      (parityCodeDescriptor [false, true]).pow2 = 2 := by
+  native_decide
+
+
+example :
+    parityOnes [true, false] = 1 ∧
+      parityOnes [false, true] = 1 ∧
+      [true, false].length = 2 ∧
+      [false, true].length = 2 := by
+  native_decide
+
+
+/-!
+  ## Concrete trajectory examples
+-/
+
+
+/--
+  A) Two successive odd steps: `7 → 11 → 17`, bits = `[true, true]`.
+
+      D = (2, 2, 5)
+      3² · 7 + 5 = 2² · 17
+      63 + 5 = 68
+-/
+example :
+    parityCodeDescriptor [true, true] =
+      { pow3 := 2, pow2 := 2, correction := 5 } := by
+  native_decide
+
+
+example :
+    AffineRealizes (parityCodeDescriptor [true, true]) 7 17 := by
+  native_decide
+
+
+example : 3 ^ 2 * 7 + 5 = 2 ^ 2 * 17 := by
+  native_decide
+
+
+/--
+  Witness that `[true, true]` is a real Collatz parity trajectory
+  from 7 to 17.
+-/
+example :
+    RealizesParityCode [true, true] 7 17 := by
+  have h0 : ParityStep true 7 11 := by
+    unfold ParityStep; exact ⟨by decide, by decide⟩
+  have h1 : ParityStep true 11 17 := by
+    unfold ParityStep; exact ⟨by decide, by decide⟩
+  exact RealizesParityCode.cons h0
+    (RealizesParityCode.cons h1 (RealizesParityCode.nil 17))
+
+
+/--
+  B) Different order: `6 → 3 → 5`, bits = `[false, true]`.
+
+      D = (1, 2, 2)
+      3 · 6 + 2 = 4 · 5
+-/
+example :
+    parityCodeDescriptor [false, true] =
+      { pow3 := 1, pow2 := 2, correction := 2 } := by
+  native_decide
+
+
+example :
+    AffineRealizes (parityCodeDescriptor [false, true]) 6 5 := by
+  native_decide
+
+
+example : 3 * 6 + 2 = 4 * 5 := by
+  native_decide
+
+
+example :
+    RealizesParityCode [false, true] 6 5 := by
+  have h0 : ParityStep false 6 3 := by
+    unfold ParityStep; exact ⟨by decide, by decide⟩
+  have h1 : ParityStep true 3 5 := by
+    unfold ParityStep; exact ⟨by decide, by decide⟩
+  exact RealizesParityCode.cons h0
+    (RealizesParityCode.cons h1 (RealizesParityCode.nil 5))
+
+
+/--
+  Comparison: `5 → 8 → 4`, bits = `[true, false]`.
+
+      D = (1, 2, 1)
+
+  Same aggregate `(pow3, pow2) = (1, 2)` as the previous word, but
+  different correction: `(1, 2, 1) ≠ (1, 2, 2)`.
+-/
+example :
+    parityCodeDescriptor [true, false] =
+      { pow3 := 1, pow2 := 2, correction := 1 } := by
+  native_decide
+
+
+example :
+    AffineRealizes (parityCodeDescriptor [true, false]) 5 4 := by
+  native_decide
+
+
+example : 3 * 5 + 1 = 4 * 4 := by
+  native_decide
+
+
+example :
+    RealizesParityCode [true, false] 5 4 := by
+  have h0 : ParityStep true 5 8 := by
+    unfold ParityStep; exact ⟨by decide, by decide⟩
+  have h1 : ParityStep false 8 4 := by
+    unfold ParityStep; exact ⟨by decide, by decide⟩
+  exact RealizesParityCode.cons h0
+    (RealizesParityCode.cons h1 (RealizesParityCode.nil 4))
+
+
+example :
+    parityCodeDescriptor [true, false] ≠
+      parityCodeDescriptor [false, true] := by
+  native_decide
+
+
+/--
+  Little-endian binary value of a finite parity word:
+
+      value([]) = 0
+      value(b :: bs) = bit(b) + 2 * value(bs)
+
+  i.e. `v₀ + 2 v₁ + 4 v₂ + ⋯`.
+
+  Prepares the future interface `Q(x) mod 2^n`.  Full coding theory
+  is not developed here.
+-/
+def parityCodeValue : ParityCode → ℕ
+  | [] => 0
+  | b :: bs => (if b then 1 else 0) + 2 * parityCodeValue bs
+
+
+example : parityCodeValue [true, true] = 3 := by
+  native_decide
+
+
+example : parityCodeValue [false, true] = 2 := by
+  native_decide
+
+
+example : parityCodeValue [true, false] = 1 := by
+  native_decide
+
+
+example : parityCodeValue [] = 0 := by
+  native_decide
+
+
+/-!
+  ## Q / PARITY-CODE INTERFACE — NOT A RANDOM-ACCESS RESULT
+
+  Future interpretation (NOT formalized in this task; no extra
+  2-adic theory is imported solely for this interface):
+
+      Q(x) = ∑_{i ≥ 0} vᵢ 2ⁱ
+
+  where
+
+      vᵢ = Tⁱ(x) mod 2
+
+  and the length-`n` prefix is
+
+      Qₙ(x) = Q(x) mod 2ⁿ.
+
+  Conceptual pipeline:
+
+      Qₙ(x)
+        ↓ decode bits
+      ParityCode of length n
+        ↓ parityCodeDescriptor
+      AffineDescriptor
+        ↓ AffineRealizes
+      Tⁿ(x)
+
+  IMPORTANT:
+  The traditional definition of `Qₙ(x)` obtains those bits by
+  walking the orbit.  This interface therefore does NOT yet solve
+  random access to the n-th parity bit, nor efficient evaluation of
+  the n-step affine descriptor from `(x, n)` alone.
+
+  No claim is made that `Q` can be computed efficiently.
+  Existence of the parity code is not an algorithm for its n-th bit.
+-/
+
+
+/-!
+  ## RESEARCH QUESTION — NOT A THEOREM
+
+  Refined BBP-like objective (motivational only):
+
+  Can the affine image of the first `n` parity bits,
+
+      parityCodeDescriptor (Q_prefix(x, n)),
+
+  be computed without materializing the `n` parity bits and without
+  enumerating the `n` intermediate Collatz states?
+
+  Conceptual diagram:
+
+      (x, n)  ≟→  Dₙ  →  Tⁿ(x)
+
+  The second arrow is already formalized by the affine theory
+  (`AffineRealizes` / `realizesParityCode_affineRealizes`).
+
+  The first arrow remains open.
+
+  Equivalently: is there a direct map
+
+      (x, n) ↦ parityCodeDescriptor (first n parity bits of x)
+
+  that avoids orbit traversal?
+
+  KNOWN here:
+  * `ParityCode → AffineDescriptor` compilation is exact;
+  * realized words satisfy the affine identity;
+  * order of bits is recorded in `correction`.
+
+  UNKNOWN (explicitly not claimed):
+  * random access to bit n;
+  * sublinear descriptor construction;
+  * a BBP-style digit formula for Collatz;
+  * prediction of bits via `RhinBridge` alone;
+  * Collatz convergence.
+-/
+
+
+/-!
+  ## Future: divide-and-conquer via affine composition
+
+  Research note only, unless the theorem below compiles:
+
+  If `D(u)` and `D(v)` are descriptors of two parity words, then
+
+      D(u ++ v) = D(u) ⋆ D(v)
+
+  where `⋆ = affineCompose`.
+
+  This is the algebraic property that could support a future
+  divide-and-conquer strategy on parity words.  It does not by
+  itself yield random access.
+-/
+
+
+/--
+  Descriptor of a concatenated parity word is the affine composition
+  of the descriptors.  Orientation matches chronology of `u ++ v`.
+-/
+theorem parityCodeDescriptor_append
+    (u v : ParityCode) :
+    parityCodeDescriptor (u ++ v) =
+      affineCompose
+        (parityCodeDescriptor u)
+        (parityCodeDescriptor v) := by
+  induction u with
+  | nil =>
+      -- affineCompose affineId (parityCodeDescriptor v)
+      --   = parityCodeDescriptor v
+      simpa [parityCodeDescriptor, List.nil_append] using
+        (affineCompose_id_left (parityCodeDescriptor v)).symm
+  | cons b bs ih =>
+      -- IH: parityCodeDescriptor (bs ++ v)
+      --       = affineCompose (parityCodeDescriptor bs)
+      --                       (parityCodeDescriptor v)
+      -- Goal uses associativity of the explicit triple formula.
+      -- Expand both sides through affineCompose.
+      cases b <;>
+        simp [parityCodeDescriptor, parityBitDescriptor,
+          affineCompose, List.cons_append, ih, Nat.pow_add,
+          Nat.mul_add, Nat.mul_assoc, Nat.add_assoc,
+          Nat.mul_left_comm, Nat.mul_comm]
