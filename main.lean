@@ -15635,6 +15635,13 @@ def AffineRealizes (d : AffineDescriptor) (x y : ℕ) : Prop :=
   3 ^ d.pow3 * x + d.correction = 2 ^ d.pow2 * y
 
 
+instance instDecidableAffineRealizes
+    (d : AffineDescriptor) (x y : ℕ) :
+    Decidable (AffineRealizes d x y) := by
+  unfold AffineRealizes
+  infer_instance
+
+
 /--
   Identity descriptor: `pow3 = 0`, `pow2 = 0`, `correction = 0`.
   Realizes `x = y`.
@@ -15784,7 +15791,7 @@ theorem two_odd_steps_realizes
     {a b x y z : ℕ}
     (h1 : AffineRealizes (oddStepAffine a) x y)
     (h2 : AffineRealizes (oddStepAffine b) y z) :
-    9 * x + 3 + 2 ^ a = 2 ^ (a + b) * z := by
+    9 * x + (3 + 2 ^ a) = 2 ^ (a + b) * z := by
   have h := affineCompose_realizes h1 h2
   rw [two_odd_steps_affineCompose_eq] at h
   unfold AffineRealizes at h
