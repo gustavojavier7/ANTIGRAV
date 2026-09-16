@@ -385,7 +385,7 @@ theorem oneBlockGap_ceil_alpha_le_a
       rw [← mul_sub, hdiff]
     rwa [← hrewrite]
   have hmul : (s : ℝ) * alpha < (a : ℝ) := by
-    rw [alpha_eq_log_two_three_halves, mul_div_assoc]
+    rw [alpha_eq_log_two_three_halves, ← mul_div_assoc]
     exact (div_lt_iff₀ hlog2).2 hlog_half
   have halpha : 0 < alpha := by
     rw [alpha_eq_log_two_three_halves]
