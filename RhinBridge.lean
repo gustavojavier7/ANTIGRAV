@@ -342,3 +342,62 @@ theorem pow_gap_eventually
       norm_cast
     simpa [Nat.cast_pow, hsub] using hreal
   exact_mod_cast hcast
+
+/-- Bridge lemma. A pure power comparison `3 ^ s < 2 ^ (a + s)` forces the
+critical ceiling bound
+`Int.toNat (Int.ceil ((s : ℝ) * alpha)) ≤ a`
+with `alpha = log₂(3/2)`.
+
+Mathematical chain (exact, no numerical approximation):
+`3^s < 2^(a+s)`
+→ `s · log 3 < (a+s) · log 2`
+→ `s · log(3/2) < a · log 2`
+→ `s · alpha < a`
+→ `⌈s · alpha⌉ ≤ a`
+→ `toNat(⌈s · alpha⌉) ≤ a`. -/
+theorem oneBlockGap_ceil_alpha_le_a
+    {a s : ℕ}
+    (_ha : 1 ≤ a)
+    (_hs : 1 ≤ s)
+    (hpow : 3 ^ s < 2 ^ (a + s)) :
+    Int.toNat (Int.ceil ((s : ℝ) * alpha)) ≤ a := by
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlt : (3 : ℝ) ^ s < (2 : ℝ) ^ (a + s) := by
+    exact_mod_cast hpow
+  have hlog :=
+    Real.log_lt_log (by positivity : 0 < (3 : ℝ) ^ s) hlt
+  rw [Real.log_pow, Real.log_pow] at hlog
+  -- hlog : ↑s * log 3 < ↑(a + s) * log 2
+  have hlog' :
+      (s : ℝ) * Real.log 3 - (s : ℝ) * Real.log 2 <
+        (a : ℝ) * Real.log 2 := by
+    push_cast at hlog
+    linarith
+  have hlog_half :
+      (s : ℝ) * Real.log (3 / 2 : ℝ) < (a : ℝ) * Real.log 2 := by
+    have hdiff :
+        Real.log 3 - Real.log 2 = Real.log (3 / 2 : ℝ) :=
+      (Real.log_div (by norm_num : (3 : ℝ) ≠ 0)
+        (by norm_num : (2 : ℝ) ≠ 0)).symm
+    have hrewrite :
+        (s : ℝ) * Real.log 3 - (s : ℝ) * Real.log 2 =
+          (s : ℝ) * Real.log (3 / 2 : ℝ) := by
+      rw [← mul_sub, hdiff]
+    rwa [← hrewrite]
+  have hmul : (s : ℝ) * alpha < (a : ℝ) := by
+    rw [alpha_eq_log_two_three_halves, ← mul_div_assoc]
+    exact (div_lt_iff₀ hlog2).2 hlog_half
+  have halpha : 0 < alpha := by
+    rw [alpha_eq_log_two_three_halves]
+    exact div_pos
+      (Real.log_pos (by norm_num : (1 : ℝ) < 3 / 2)) hlog2
+  have hv0 : 0 ≤ Int.ceil ((s : ℝ) * alpha) :=
+    Int.ceil_nonneg
+      (mul_nonneg (Nat.cast_nonneg _) (le_of_lt halpha))
+  have hceil : Int.ceil ((s : ℝ) * alpha) ≤ (a : ℤ) :=
+    (Int.ceil_le).2 (le_of_lt hmul)
+  have hcoe :
+      ((Int.toNat (Int.ceil ((s : ℝ) * alpha)) : ℕ) : ℤ) ≤
+        (a : ℤ) := by
+    rwa [Int.toNat_of_nonneg hv0]
+  exact_mod_cast hcoe
