@@ -1,4 +1,5 @@
 import Mathlib
+import RhinBridge
 
 
 
@@ -9540,6 +9541,47 @@ theorem oneBlockGap_power_squeeze
     simp only [mul_one]
     omega
   · simpa [pow_add] using hgap
+
+
+/-- Conditional eventual impossibility of one-block gap pairs under a Rhin-type
+`PhaseGap` hypothesis.
+
+Assembles three existing results only:
+* `oneBlockGap_power_squeeze`
+* `oneBlockGap_ceil_alpha_le_a`
+* `pow_gap_eventually`
+
+The threshold `R` is existential (from `pow_gap_eventually`) and is not claimed
+to be effective. This does **not** assert `OneBlockGapRigidity`. -/
+theorem oneBlockGap_eventually_impossible_of_phaseGap
+    {c : ℝ}
+    (hphase : Erdos1135.ND.PhaseGap c (143 / 10 : ℝ)) :
+    ∃ R : ℕ, ∀ a s : ℕ,
+      R ≤ s →
+      1 ≤ a →
+      1 ≤ s →
+      0 < 2 ^ (a + s) - 3 ^ s →
+      (2 ^ (a + s) - 3 ^ s) ∣ (2 ^ a - 1) →
+      False := by
+  have hc : 0 < c := hphase.c_pos
+  obtain ⟨R, hPow⟩ := pow_gap_eventually hc hphase
+  refine ⟨R, ?_⟩
+  intro a s hRs ha hs hgap hdvd
+  have hsq :=
+    oneBlockGap_power_squeeze ha hs hgap hdvd
+  have hceil :=
+    oneBlockGap_ceil_alpha_le_a ha hs hsq.2
+  have hmono :
+      2 ^ Int.toNat (Int.ceil ((s : ℝ) * alpha)) * (2 ^ s - 1)
+        ≤ 2 ^ a * (2 ^ s - 1) :=
+    Nat.mul_le_mul_right _
+      (Nat.pow_le_pow_right (by norm_num : 1 ≤ 2) hceil)
+  have hpow :=
+    hPow s hRs (by omega)
+  have hbad :
+      3 ^ s < 2 ^ a * (2 ^ s - 1) :=
+    lt_of_lt_of_le hpow hmono
+  exact (not_lt_of_ge (Nat.le_of_lt hsq.1)) hbad
 
 
 
