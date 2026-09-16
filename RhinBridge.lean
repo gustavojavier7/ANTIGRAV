@@ -189,6 +189,27 @@ private theorem two_zpow_neg_le_half {r : ℕ} (hr1 : 1 ≤ r) :
   -- (1/2) * (2^k)⁻¹ ≤ (1/2) * 1 = 1/2
   simpa using hle
 
+/-- Elementary critical-error bound used by Astra: for `s ≥ 1`,
+`-log₂(1 - 2⁻ˢ) ≤ 1`. -/
+theorem critical_error_le_one
+    {s : ℕ}
+    (hs : 1 ≤ s) :
+    - Real.log (1 - (2 : ℝ) ^ (-(s : ℤ))) / Real.log 2 ≤ 1 := by
+  have hx : (2 : ℝ) ^ (-(s : ℤ)) ≤ (1 / 2 : ℝ) := two_zpow_neg_le_half hs
+  have hhalf_le : (1 / 2 : ℝ) ≤ 1 - (2 : ℝ) ^ (-(s : ℤ)) := by linarith
+  have hlog :
+      Real.log (1 / 2 : ℝ) ≤ Real.log (1 - (2 : ℝ) ^ (-(s : ℤ))) :=
+    Real.log_le_log (by norm_num : (0 : ℝ) < 1 / 2) hhalf_le
+  have hlog_half : Real.log (1 / 2 : ℝ) = -Real.log 2 := by
+    rw [Real.log_div (by norm_num : (1 : ℝ) ≠ 0) (by norm_num : (2 : ℝ) ≠ 0),
+      Real.log_one, zero_sub]
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hneg : -Real.log (1 - (2 : ℝ) ^ (-(s : ℤ))) ≤ Real.log 2 := by
+    linarith [hlog, hlog_half]
+  have hdiv := (div_le_div_iff_of_pos_right hlog2).2 hneg
+  have hone : Real.log 2 / Real.log 2 = (1 : ℝ) := div_self (ne_of_gt hlog2)
+  simpa [hone] using hdiv
+
 /-- 7. The exponentially small correction `-log₂(1 - 2⁻ʳ)` is eventually
 smaller than any positive Rhin polynomial phase gap. -/
 theorem exp_error_eventually_lt_power_gap
