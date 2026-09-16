@@ -23,8 +23,15 @@ jobs:
         with:
           build: "false"
 
+      # Build package modules so Erdos1135.ND.PhaseGap is on LEAN_PATH.
+      - name: Build Antigrav library modules
+        run: lake build Antigrav
+
       - name: Check main.lean
         run: lake env lean main.lean
+
+      - name: Check RhinBridge.lean
+        run: lake env lean RhinBridge.lean
 
       - name: Report Lean Version & Build Metadata
         run: |
@@ -35,4 +42,3 @@ jobs:
           echo "* **Configuración (\`lean-toolchain\`):** \`$TOOLCHAIN\`" >> $GITHUB_STEP_SUMMARY
           echo "* **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "* **Fecha de verificación:** \`$(date -u '+%Y-%m-%d %H:%M:%S UTC')\`" >> $GITHUB_STEP_SUMMARY
-

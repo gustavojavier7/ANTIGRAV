@@ -4,6 +4,10 @@ defaultTargets = ["Antigrav"]
 
 [[lean_lib]]
 name = "Antigrav"
+# RhinBridge imports Erdos1135.ND.PhaseGap; both must be package modules
+# so `lake build Antigrav` and `lake env lean RhinBridge.lean` resolve them.
+roots = ["RhinBridge"]
+globs = ["RhinBridge", "Erdos1135.+"]
 
 [[require]]
 name = "mathlib"
