@@ -1,0 +1,12 @@
+name = "prove2me-mcp-readonly"
+integration = "external-readonly-helper"
+repository = "UNRESOLVED"
+commit = "UNRESOLVED"
+
+# FAIL FIRST: activation is forbidden until repository and commit are reviewed.
+enabled = false
+allows_write_operations = false
+allows_agent_supplied_credentials = false
+allows_agent_supplied_urls = false
+allows_agent_supplied_http_methods = false
+allows_agent_supplied_headers = false
